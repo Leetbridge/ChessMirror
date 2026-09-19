@@ -10,3 +10,6 @@ export interface EngineAnalyzer {
   analyze(fen: string, options?: AnalyzeOptions): Promise<PositionEval>;
   close(): Promise<void>;
 }
+
+export { UciEngine, EngineError, EngineNotFoundError, parseInfo, spawnUci } from "./uci";
+export type { UciEngineOptions, UciProcess, UciSpawn } from "./uci";
