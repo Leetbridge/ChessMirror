@@ -3,9 +3,9 @@ import type { Finding } from "../../core/domain";
 export const DETECTOR_LABELS: Record<string, string> = {
   "time-trouble-blunders": "Mistakes under time pressure",
   "tilt-after-loss": "Play after a loss",
-  "throwing-away-winning-positions": "Winning positions not converted",
-  "too-fast-critical-moves": "Fast moves in critical positions",
-  "never-resigning": "Continuing lost games",
+  "thrown-wins": "Winning positions not converted",
+  "fast-critical-moves": "Fast moves in critical positions",
+  "no-resignation": "Continuing lost games",
 };
 
 export function detectorLabel(detector: string): string {

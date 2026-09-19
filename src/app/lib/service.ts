@@ -1,3 +1,7 @@
+// NOTE: chessmirror is a single-user local tool. The job store is in memory and the
+// API has no authentication or rate limiting. Do not expose it publicly without adding
+// both (size and concurrency limits exist in the analyze route and the service, but
+// they are not a substitute).
 import { createMockService } from "./mock-service";
 import type { AnalysisService } from "./types";
 

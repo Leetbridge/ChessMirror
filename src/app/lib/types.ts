@@ -1,10 +1,33 @@
 import { z } from "zod";
 import { FindingSchema, PlanSchema } from "../../core/domain";
 
+export const MAX_PGN_CHARS = 2_000_000;
+export const MAX_PGN_GAMES = 200;
+/** Request body cap in bytes: PGN text can be multi-byte, plus JSON overhead. */
+export const MAX_BODY_BYTES = 4_200_000;
+
+/** Thrown by start() when another analysis is already running. */
+export class ServiceBusyError extends Error {
+  constructor() {
+    super("Another analysis is already running. Try again in a moment.");
+    this.name = "ServiceBusyError";
+  }
+}
+
 export const ImportRequestSchema = z.discriminatedUnion("source", [
   z.object({ source: z.literal("lichess"), username: z.string().trim().min(2).max(30).regex(/^[A-Za-z0-9_-]+$/) }),
   z.object({ source: z.literal("chesscom"), username: z.string().trim().min(3).max(25).regex(/^[A-Za-z0-9_-]+$/) }),
-  z.object({ source: z.literal("pgn"), pgn: z.string().trim().min(10).max(2_000_000) }),
+  z.object({
+    source: z.literal("pgn"),
+    pgn: z
+      .string()
+      .trim()
+      .min(10)
+      .max(MAX_PGN_CHARS)
+      .refine((p) => (p.match(/^\[Event /gm) ?? []).length <= MAX_PGN_GAMES, {
+        message: `At most ${MAX_PGN_GAMES} games per paste`,
+      }),
+  }),
 ]);
 export type ImportRequest = z.infer<typeof ImportRequestSchema>;
 

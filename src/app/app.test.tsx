@@ -1,12 +1,14 @@
+// @vitest-environment node
+// Components are rendered with react-dom/server, so no DOM environment is needed.
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { FindingCard } from "./components/FindingCard";
+import { FindingCard, detectorLabel } from "./components/FindingCard";
 import { StateMessage } from "./components/StateMessage";
 import { PlanContent } from "./components/PlanView";
 import { FindingsList } from "./components/DashboardView";
 import { buildRequest } from "./components/ImportForm";
-import { buildMockResult, createMockService } from "./lib/mock-service";
-import { ImportRequestSchema, JobStateSchema } from "./lib/types";
+import { JOB_TTL_MS, MAX_JOBS, buildMockResult, createMockService } from "./lib/mock-service";
+import { ImportRequestSchema, JobStateSchema, MAX_PGN_GAMES, ServiceBusyError } from "./lib/types";
 
 const result = buildMockResult();
 
@@ -33,11 +35,47 @@ describe("mock service", () => {
     let t = 0;
     const svc = createMockService(() => t);
     const e = await svc.start({ source: "lichess", username: "error-demo" });
-    const m = await svc.start({ source: "chesscom", username: "empty-demo" });
     t = 10_000;
+    const m = await svc.start({ source: "chesscom", username: "empty-demo" });
+    t = 20_000;
     expect((await svc.get(e.id))?.state).toBe("error");
     const empty = await svc.get(m.id);
     expect(empty?.state === "done" && empty.result.gamesAnalyzed).toBe(0);
+  });
+});
+
+describe("mock service limits", () => {
+  const req = { source: "lichess", username: "magnus" } as const;
+  it("allows only one running job at a time", async () => {
+    const svc = createMockService(() => 0);
+    await svc.start(req);
+    await expect(svc.start(req)).rejects.toBeInstanceOf(ServiceBusyError);
+  });
+  it("expires jobs after the TTL", async () => {
+    let t = 0;
+    const svc = createMockService(() => t);
+    const { id } = await svc.start(req);
+    t = JOB_TTL_MS + 1;
+    expect(await svc.get(id)).toBeUndefined();
+  });
+  it("caps the number of stored jobs", async () => {
+    let t = 0;
+    const svc = createMockService(() => t);
+    const first = await svc.start(req);
+    for (let i = 0; i < MAX_JOBS + 5; i++) {
+      t += 10_000;
+      await svc.start(req);
+    }
+    expect(await svc.get(first.id)).toBeUndefined();
+  });
+  it("rejects a paste with too many games", () => {
+    const pgn = '[Event "x"]\n1. e4 *\n\n'.repeat(MAX_PGN_GAMES + 1);
+    expect(ImportRequestSchema.safeParse({ source: "pgn", pgn }).success).toBe(false);
+  });
+  it("uses the real detector ids", () => {
+    const ids = result.findings.map((f) => f.detector);
+    expect(ids).toEqual(["time-trouble-blunders", "thrown-wins", "fast-critical-moves", "tilt-after-loss", "no-resignation"]);
+    for (const id of ids) expect(detectorLabel(id)).not.toBe(id.replace(/-/g, " "));
   });
 });
 

@@ -1,8 +1,11 @@
 import { FindingSchema, PlanSchema } from "../../core/domain";
-import { JobStateSchema, type AnalysisResult, type AnalysisService, type ImportRequest, type JobState } from "./types";
+import { JobStateSchema, ServiceBusyError, type AnalysisResult, type AnalysisService, type ImportRequest, type JobState } from "./types";
 
 const GAMES = 24;
 const DURATION_MS = 3000;
+/** Bounds on the in-memory job store. */
+export const JOB_TTL_MS = 60 * 60 * 1000;
+export const MAX_JOBS = 50;
 const STAGES = ["import", "engine", "habits", "plan"] as const;
 
 export function buildMockResult(gamesAnalyzed = GAMES): AnalysisResult {
@@ -36,7 +39,7 @@ export function buildMockResult(gamesAnalyzed = GAMES): AnalysisResult {
     },
     {
       id: "f-winning-positions",
-      detector: "throwing-away-winning-positions",
+      detector: "thrown-wins",
       status: "detected",
       evidence: [
         { gameId: "mock:g03", ply: 52, note: "Evaluation fell from +4.1 to 0.0" },
@@ -62,7 +65,7 @@ export function buildMockResult(gamesAnalyzed = GAMES): AnalysisResult {
     },
     {
       id: "f-fast-moves",
-      detector: "too-fast-critical-moves",
+      detector: "fast-critical-moves",
       status: "detected",
       evidence: [{ gameId: "mock:g09", ply: 22, note: "Move played in 1s in a tactical position" }],
       severity: "low",
@@ -91,7 +94,7 @@ export function buildMockResult(gamesAnalyzed = GAMES): AnalysisResult {
     },
     {
       id: "f-resign",
-      detector: "never-resigning",
+      detector: "no-resignation",
       status: "insufficient_data",
       reason: "Fewer than 3 lost games in the sample.",
     },
@@ -115,15 +118,33 @@ interface Job {
 /** Demo behaviour: username "error-demo" fails, "empty-demo" yields no games. */
 export function createMockService(now: () => number = Date.now): AnalysisService {
   const jobs = new Map<string, Job>();
+  const sweep = () => {
+    const t = now();
+    for (const [key, job] of jobs) if (t - job.startedAt > JOB_TTL_MS) jobs.delete(key);
+    // Map keeps insertion order, so the oldest entries go first.
+    while (jobs.size >= MAX_JOBS) {
+      const oldest = jobs.keys().next().value;
+      if (oldest === undefined) break;
+      jobs.delete(oldest);
+    }
+  };
   return {
     async start(request) {
+      sweep();
+      for (const job of jobs.values()) {
+        if (now() - job.startedAt < DURATION_MS) throw new ServiceBusyError();
+      }
       const id = crypto.randomUUID();
       jobs.set(id, { startedAt: now(), request });
       return { id };
     },
     async get(id) {
+      const t = now();
       const job = jobs.get(id);
-      if (!job) return undefined;
+      if (!job || t - job.startedAt > JOB_TTL_MS) {
+        jobs.delete(id);
+        return undefined;
+      }
       const name = job.request.source === "pgn" ? "" : job.request.username.toLowerCase();
       const ratio = Math.min(1, (now() - job.startedAt) / DURATION_MS);
       let state: JobState;
