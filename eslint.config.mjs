@@ -35,7 +35,7 @@ const policies = [
 export default defineConfig([
   ...nextVitals,
   ...nextTs,
-  globalIgnores([".next/**", "out/**", "build/**", "next-env.d.ts", "coverage/**", "tests/fixtures/**"]),
+  globalIgnores([".next/**", "out/**", "build/**", "next-env.d.ts", "coverage/**", "tests/fixtures/**", ".claude/worktrees/**"]),
   {
     files: ["src/**/*.{ts,tsx}"],
     plugins: { boundaries },

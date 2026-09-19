@@ -1,18 +1,12 @@
-import type { z } from "zod";
-
-export interface LlmRequest<T> {
-  system: string;
-  prompt: string;
-  /** Output must be validated against this schema before it is returned. */
-  schema: z.ZodType<T>;
-  maxTokens?: number;
-}
-
-/**
- * Text-generation seam. Implementations return validated structured output.
- * The LLM never invents chess moves; callers validate moves against engine input.
- */
-export interface LlmProvider {
-  readonly name: string;
-  generate<T>(request: LlmRequest<T>): Promise<T>;
-}
+export * from "./provider";
+export * from "./registry";
+export { AnthropicProvider, createAnthropicProvider, DEFAULT_ANTHROPIC_MODEL } from "./anthropic";
+export * from "./advice";
+export * from "./context";
+export { explainFindings } from "./coach";
+export type { CoachResult, CoachSource, ExplainOptions } from "./coach";
+export { templateAdvice } from "./template";
+export { validateAdvice, extractMoveTokens, findEmotionClaim, hasHedge } from "./validate";
+export { COACH_SYSTEM_PROMPT, buildCoachPrompt } from "./prompts";
+export { checkGrounding } from "./grounding";
+export { aliasContext } from "./alias";
