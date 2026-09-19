@@ -1,0 +1,14 @@
+[Event "Synthetic fixture"]
+[Site "chessmirror-fixtures"]
+[Date "2026.01.01"]
+[Round "-"]
+[White "SyntheticWhite"]
+[Black "SyntheticBlack"]
+[Result "1-0"]
+[Variant "Chess960"]
+[SetUp "1"]
+[FEN "bbqnnrkr/pppppppp/8/8/8/8/PPPPPPPP/BBQNNRKR w KQkq - 0 1"]
+[TimeControl "300+0"]
+[Termination "Normal"]
+
+1. g3 {[%clk 0:04:57]} d5 {[%clk 0:04:58]} 2. d4 {[%clk 0:04:55]} g6 {[%clk 0:04:57]} 1-0

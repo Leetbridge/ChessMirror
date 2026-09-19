@@ -1,0 +1,11 @@
+[Event "Synthetic fixture"]
+[Site "chessmirror-fixtures"]
+[Date "2026.01.01"]
+[Round "-"]
+[White "SyntheticWhite"]
+[Black "SyntheticBlack"]
+[Result "1-0"]
+[TimeControl "600+0"]
+[Termination "Abandoned"]
+
+1. d4 {[%clk 0:09:59]} Nf6 {[%clk 0:09:59]} 1-0
