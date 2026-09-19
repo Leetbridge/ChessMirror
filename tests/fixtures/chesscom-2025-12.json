@@ -1,0 +1,4 @@
+{"games":[
+{"url":"https://www.chess.com/game/live/001","rules":"chess","end_time":1766000000,
+ "pgn":"[Event \"Live Chess\"]\n[Site \"Chess.com\"]\n[Date \"2025.12.17\"]\n[White \"hero\"]\n[Black \"Rival\"]\n[Result \"1-0\"]\n[UTCDate \"2025.12.17\"]\n[UTCTime \"19:33:20\"]\n[TimeControl \"600+5\"]\n[Link \"https://www.chess.com/game/live/001\"]\n\n1. e4 e5 2. Bc4 Nc6 3. Qh5 Nf6 4. Qxf7# 1-0"}
+]}
