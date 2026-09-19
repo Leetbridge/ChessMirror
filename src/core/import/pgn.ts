@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { Chess } from "chess.js";
 import { GameSchema, type Game, type GameResult, type GameSourceId, type Move, type TimeControl } from "../domain";
 
@@ -7,9 +8,34 @@ export interface ParseContext {
   username: string;
   /** Used when the PGN has no usable date (ISO 8601). */
   fallbackPlayedAt?: string;
+  /** Cap on games examined by parsePgnText; never above MAX_GAMES. */
+  maxGames?: number;
 }
 
-export type SkipReason = "variant" | "custom-start" | "no-moves" | "invalid-pgn" | "user-not-in-game" | "invalid-game";
+/** Hard limits for untrusted PGN input. */
+export const MAX_GAMES = 1000;
+export const MAX_INPUT_CHARS = 20_000_000;
+/** Maximum half-moves accepted per game; longer games are skipped. */
+export const MAX_PLIES_PER_GAME = 1000;
+/** Game ids taken from untrusted headers must match this, otherwise a hash-based id is generated. */
+export const SAFE_ID_RE = /^[A-Za-z0-9._:-]{1,64}$/;
+
+export class PgnLimitError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "PgnLimitError";
+  }
+}
+
+export type SkipReason =
+  | "variant"
+  | "custom-start"
+  | "no-moves"
+  | "invalid-pgn"
+  | "user-not-in-game"
+  | "invalid-game"
+  | "too-long"
+  | "over-limit";
 
 export type ParseOutcome = { ok: true; game: Game } | { ok: false; reason: SkipReason; detail?: string };
 
@@ -25,6 +51,9 @@ export function parseClockMs(comment: string | undefined): number | undefined {
 
 /** Split multi-game PGN text into single-game strings. */
 export function splitPgn(text: string): string[] {
+  if (text.length > MAX_INPUT_CHARS) {
+    throw new PgnLimitError(`PGN input is larger than ${MAX_INPUT_CHARS} characters.`);
+  }
   return text
     .replace(/\r\n?/g, "\n")
     .split(/\n\s*\n(?=\[Event\s)/)
@@ -80,6 +109,7 @@ export function parseGamePgn(pgn: string, ctx: ParseContext): ParseOutcome {
 
   const history = chess.history({ verbose: true });
   if (history.length === 0) return { ok: false, reason: "no-moves" };
+  if (history.length > MAX_PLIES_PER_GAME) return { ok: false, reason: "too-long", detail: `${history.length} plies` };
 
   const white = h["White"]?.trim() ?? "";
   const black = h["Black"]?.trim() ?? "";
@@ -101,9 +131,16 @@ export function parseGamePgn(pgn: string, ctx: ParseContext): ParseOutcome {
 
   const site = h["Site"] ?? "";
   const link = h["Link"] ?? (/^https?:\/\//.test(site) ? site : undefined);
-  const nativeId = h["GameId"] ?? (link ? link.split("/").filter(Boolean).pop() : undefined);
+  const rawId = h["GameId"] ?? (link ? link.split("/").filter(Boolean).pop() : undefined);
   const when = playedAt(h, ctx.fallbackPlayedAt);
-  const idBase = nativeId ?? `${white}-${black}-${when}`;
+  // Ids from untrusted headers are used only if they are short and made of safe characters.
+  const idBase =
+    rawId && SAFE_ID_RE.test(rawId)
+      ? rawId
+      : `h${createHash("sha256")
+          .update([white, black, when, ...moves.map((m) => m.uci)].join("|"))
+          .digest("hex")
+          .slice(0, 16)}`;
   const tc = parseTimeControl(h["TimeControl"]);
   const wr = parseRating(h["WhiteElo"]);
   const br = parseRating(h["BlackElo"]);
@@ -134,7 +171,12 @@ export function parsePgnText(
 ): { games: Game[]; skipped: { reason: SkipReason; detail?: string }[] } {
   const games: Game[] = [];
   const skipped: { reason: SkipReason; detail?: string }[] = [];
+  const limit = Math.min(ctx.maxGames ?? MAX_GAMES, MAX_GAMES);
   for (const chunk of splitPgn(text)) {
+    if (games.length + skipped.length >= limit) {
+      skipped.push({ reason: "over-limit", detail: `stopped after ${limit} games` });
+      break;
+    }
     const r = parseGamePgn(chunk, ctx);
     if (r.ok) games.push(r.game);
     else skipped.push({ reason: r.reason, ...(r.detail ? { detail: r.detail } : {}) });

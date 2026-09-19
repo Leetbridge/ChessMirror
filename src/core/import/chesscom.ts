@@ -1,8 +1,8 @@
 import { z } from "zod";
 import type { Game } from "../domain";
 import type { GameQuery, GameSource } from "./index";
-import { getWithBackoff, type HttpOptions } from "./http";
-import { parsePgnText } from "./pgn";
+import { DEFAULT_MAX_GAMES, getWithBackoff, readTextCapped, type HttpOptions } from "./http";
+import { MAX_GAMES, parsePgnText } from "./pgn";
 
 export interface ChessComOptions extends HttpOptions {
   baseUrl?: string;
@@ -22,6 +22,19 @@ const MonthSchema = z.object({
   ),
 });
 
+/** SSRF guard: archive URLs come from the API response, so only follow same-origin /pub/player/ paths. */
+function assertTrustedArchiveUrl(archiveUrl: string, baseOrigin: string): void {
+  let u: URL;
+  try {
+    u = new URL(archiveUrl);
+  } catch {
+    throw new Error(`Refusing malformed archive URL: ${JSON.stringify(archiveUrl)}`);
+  }
+  if (u.origin !== baseOrigin || !u.pathname.startsWith("/pub/player/")) {
+    throw new Error(`Refusing untrusted archive URL: ${JSON.stringify(archiveUrl)}`);
+  }
+}
+
 /**
  * chess.com PubAPI: GET /pub/player/{user}/games/archives -> {archives: [monthly urls]},
  * then GET each monthly url -> {games: [{pgn, rules, end_time, ...}]}.
@@ -35,7 +48,7 @@ export class ChessComSource implements GameSource {
 
   private async getJson(url: string): Promise<unknown> {
     const res = await getWithBackoff(url, { "User-Agent": this.opts.userAgent, Accept: "application/json" }, this.opts);
-    return res.json();
+    return JSON.parse(await readTextCapped(res, this.opts.maxBodyBytes));
   }
 
   async fetchGames(query: GameQuery): Promise<Game[]> {
@@ -45,9 +58,12 @@ export class ChessComSource implements GameSource {
     const sinceMs = query.since ? Date.parse(query.since) : undefined;
     if (query.since && Number.isNaN(sinceMs)) throw new Error(`Invalid "since" date: ${query.since}`);
 
+    const max = Math.max(1, Math.min(query.max ?? DEFAULT_MAX_GAMES, MAX_GAMES));
+    const baseOrigin = new URL(base).origin;
     const out: Game[] = [];
     // Newest month first so `max` keeps the most recent games.
     for (const archiveUrl of [...archives].reverse()) {
+      assertTrustedArchiveUrl(archiveUrl, baseOrigin);
       const ym = /\/(\d{4})\/(\d{2})$/.exec(archiveUrl);
       // Month ends (first instant of next month) at or before `since`: nothing older can match.
       if (ym && sinceMs !== undefined && Date.UTC(Number(ym[1]), Number(ym[2])) <= sinceMs) break;
@@ -66,8 +82,8 @@ export class ChessComSource implements GameSource {
       }
       monthGames.sort((a, b) => b.playedAt.localeCompare(a.playedAt));
       out.push(...monthGames.filter((g) => sinceMs === undefined || Date.parse(g.playedAt) >= sinceMs));
-      if (query.max !== undefined && out.length >= query.max) break;
+      if (out.length >= max) break;
     }
-    return query.max !== undefined ? out.slice(0, query.max) : out;
+    return out.slice(0, max);
   }
 }

@@ -1,5 +1,5 @@
 /** Injectable fetch, so tests never touch the network. */
-export type FetchLike = (input: string, init?: { headers?: Record<string, string> }) => Promise<Response>;
+export type FetchLike = (input: string, init?: { headers?: Record<string, string>; signal?: AbortSignal }) => Promise<Response>;
 
 export interface HttpOptions {
   fetch?: FetchLike;
@@ -9,7 +9,16 @@ export interface HttpOptions {
   maxRetries?: number;
   /** Wait when a 429 has no usable Retry-After header. Lichess docs: "waiting one minute". */
   defaultBackoffMs?: number;
+  /** Per-request timeout (headers and body). Default 30 s. */
+  timeoutMs?: number;
+  /** Maximum response body size in bytes. Default 25 MB. */
+  maxBodyBytes?: number;
 }
+
+export const DEFAULT_TIMEOUT_MS = 30_000;
+export const DEFAULT_MAX_BODY_BYTES = 25_000_000;
+/** Games requested when the caller passes no `max`. */
+export const DEFAULT_MAX_GAMES = 200;
 
 export class HttpError extends Error {
   constructor(
@@ -46,7 +55,7 @@ export async function getWithBackoff(
   const fallback = opts.defaultBackoffMs ?? 60_000;
 
   for (let attempt = 0; ; attempt++) {
-    const res = await doFetch(url, { headers });
+    const res = await doFetch(url, { headers, signal: AbortSignal.timeout(opts.timeoutMs ?? DEFAULT_TIMEOUT_MS) });
     if (res.status === 429) {
       if (attempt >= maxRetries) {
         throw new HttpError(429, url, `Rate limited (HTTP 429) after ${attempt + 1} attempts: ${url}`);
@@ -58,4 +67,28 @@ export async function getWithBackoff(
     if (!res.ok) throw new HttpError(res.status, url, `HTTP ${res.status} for ${url}`);
     return res;
   }
+}
+
+/** Read a response body as text, failing once it exceeds the byte cap (checks Content-Length, then streams). */
+export async function readTextCapped(res: Response, maxBytes: number = DEFAULT_MAX_BODY_BYTES): Promise<string> {
+  const declared = Number(res.headers.get("content-length"));
+  if (Number.isFinite(declared) && declared > maxBytes) {
+    throw new HttpError(res.status, res.url, `Response too large (${declared} > ${maxBytes} bytes).`);
+  }
+  if (!res.body) return "";
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let total = 0;
+  let out = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel().catch(() => {});
+      throw new HttpError(res.status, res.url, `Response too large (over ${maxBytes} bytes).`);
+    }
+    out += decoder.decode(value, { stream: true });
+  }
+  return out + decoder.decode();
 }

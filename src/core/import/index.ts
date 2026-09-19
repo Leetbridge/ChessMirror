@@ -27,3 +27,5 @@ export {
   type ParseOutcome,
   type SkipReason,
 } from "./pgn";
+export { DEFAULT_MAX_GAMES, DEFAULT_MAX_BODY_BYTES, DEFAULT_TIMEOUT_MS, readTextCapped } from "./http";
+export { MAX_GAMES, MAX_INPUT_CHARS, MAX_PLIES_PER_GAME, SAFE_ID_RE, PgnLimitError } from "./pgn";

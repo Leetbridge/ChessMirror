@@ -1,7 +1,7 @@
 import type { Game } from "../domain";
 import type { GameQuery, GameSource } from "./index";
-import { getWithBackoff, type HttpOptions } from "./http";
-import { parsePgnText } from "./pgn";
+import { DEFAULT_MAX_GAMES, getWithBackoff, readTextCapped, type HttpOptions } from "./http";
+import { MAX_GAMES, parsePgnText } from "./pgn";
 
 export interface LichessOptions extends HttpOptions {
   baseUrl?: string;
@@ -23,7 +23,8 @@ export class LichessSource implements GameSource {
 
   async fetchGames(query: GameQuery): Promise<Game[]> {
     const params = new URLSearchParams({ clocks: "true", opening: "false", evals: "false", perfType: STANDARD_PERFS });
-    if (query.max !== undefined) params.set("max", String(query.max));
+    const max = Math.max(1, Math.min(query.max ?? DEFAULT_MAX_GAMES, MAX_GAMES));
+    params.set("max", String(max));
     if (query.since) {
       const ms = Date.parse(query.since);
       if (Number.isNaN(ms)) throw new Error(`Invalid "since" date: ${query.since}`);
@@ -39,7 +40,7 @@ export class LichessSource implements GameSource {
       },
       this.opts,
     );
-    const text = await res.text();
-    return parsePgnText(text, { source: "lichess", username: query.username }).games;
+    const text = await readTextCapped(res, this.opts.maxBodyBytes);
+    return parsePgnText(text, { source: "lichess", username: query.username, maxGames: max }).games;
   }
 }
