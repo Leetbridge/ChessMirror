@@ -1,0 +1,8 @@
+{"games":[
+{"url":"https://www.chess.com/game/live/111","rules":"chess","end_time":1767283462,"time_class":"blitz","time_control":"180",
+ "pgn":"[Event \"Live Chess\"]\n[Site \"Chess.com\"]\n[Date \"2026.01.01\"]\n[Round \"-\"]\n[White \"Hero\"]\n[Black \"Rival\"]\n[Result \"0-1\"]\n[UTCDate \"2026.01.01\"]\n[UTCTime \"16:00:00\"]\n[WhiteElo \"1200\"]\n[BlackElo \"1250\"]\n[TimeControl \"180\"]\n[Termination \"Rival won by checkmate\"]\n[Link \"https://www.chess.com/game/live/111\"]\n\n1. f3 {[%clk 0:02:59.9]} 1... e5 {[%clk 0:02:58.6]} 2. g4 {[%clk 0:02:55.8]} 2... Qh4# {[%clk 0:02:50.1]} 0-1"},
+{"url":"https://www.chess.com/game/live/222","rules":"chess960","end_time":1767283999,
+ "pgn":"[Event \"Live Chess - Chess960\"]\n[Site \"Chess.com\"]\n[Date \"2026.01.01\"]\n[White \"Hero\"]\n[Black \"Rival\"]\n[Result \"1-0\"]\n[Variant \"Chess960\"]\n[SetUp \"1\"]\n[FEN \"nrbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/NRBQKBNR w KQkq - 0 1\"]\n\n1. e4 e5 1-0"},
+{"url":"https://www.chess.com/game/daily/333","rules":"chess","end_time":1767290000,"time_class":"daily","time_control":"1/86400",
+ "pgn":"[Event \"Daily Chess\"]\n[Site \"Chess.com\"]\n[Date \"2026.01.02\"]\n[White \"Rival\"]\n[Black \"Hero\"]\n[Result \"1/2-1/2\"]\n[TimeControl \"1/86400\"]\n[Termination \"Game drawn by agreement\"]\n[Link \"https://www.chess.com/game/daily/333\"]\n\n1. d4 d5 2. c4 c6 1/2-1/2"}
+]}
