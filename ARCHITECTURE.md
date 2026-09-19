@@ -1,0 +1,75 @@
+# Architecture
+
+chessmirror is an open-source AI chess coach. This document describes the v0 architecture and the seams that keep v1 to v4 possible without rewrites.
+
+## Principles
+
+1. **Engines and databases are the source of truth.** Stockfish (external UCI process, never bundled because it is GPL), the Lichess opening explorer and tablebases produce every chess fact.
+2. **The LLM explains, it never invents.** It receives structured findings and engine-derived move lists. Every move in its output is validated against that input; unknown moves cause a fallback to the templated text.
+3. **Behavior is a hypothesis.** We never claim to detect emotions. Signals are phrased as "this pattern is consistent with...".
+4. **Local-first.** No accounts. Data lives in a local SQLite file. Supabase is optional and off by default, behind the same `Repository` interface.
+5. **Pure core.** `src/core` has no React or Next imports. Detectors are pure functions.
+
+## Data flow
+
+```
+Lichess / chess.com / PGN
+        |  import/        -> Game[]
+        v
+   engine/ (Stockfish UCI, cached by FEN+depth)
+        |  classify/      -> AnalyzedGame[] (win%, move class, phase, clock)
+        v
+   habits/ (5 pure detectors)  -> Finding[]
+        |
+        +--> plan/  -> Plan (chess drills, soft-skill drills, puzzle themes)
+        |                  |
+        |                  +--> puzzles/ (Lichess puzzle DB in SQLite)
+        v
+   coach/ (LlmProvider or template fallback) -> explanations
+        v
+   app/ (Next.js dashboard)
+```
+
+## Modules (`src/core/`)
+
+| Module | Responsibility | May depend on |
+|---|---|---|
+| `domain` | Types and zod schemas: Game, Move, AnalyzedGame, Finding, Drill, Plan | nothing |
+| `import` | Lichess and chess.com clients, PGN parsing (chess.js). Rate-limited, injectable `fetch` | domain |
+| `engine` | UCI process wrapper, position analysis, cache | domain |
+| `classify` | Centipawn to win% model, move classification, game phase, clock extraction | domain |
+| `habits` | 5 detectors and the soft-skill mapping | domain |
+| `puzzles` | Puzzle index queries, setup script | domain, store |
+| `plan` | Findings to Plan | domain, habits, puzzles |
+| `coach` | `LlmProvider`, prompts, JSON-schema outputs, template fallback, evals | domain |
+| `store` | `Repository` interface and SQLite implementation | domain |
+
+Rules, enforced by ESLint import boundaries:
+- `habits` and `plan` never touch I/O.
+- `coach` never calls `engine`. Engine data reaches it as input.
+- Only `src/app` wires modules together.
+
+Reserved slots, no code yet: `courses` (v1), `repertoire` (v2), `endgames` (v3), `voice` and `mirror` (v4).
+
+## Habit detectors (v0)
+
+| Detector | Soft skill |
+|---|---|
+| Blunders in time trouble | Time management under pressure |
+| Tilt after a loss | Resilience |
+| Throwing away winning positions | Patience and converting |
+| Too-fast moves in critical positions | Decision-making |
+| Never resigning lost games | Acceptance |
+
+Each returns evidence (game and ply references), severity, confidence, one plain-language explanation, one chess drill and one soft-skill drill. With too few games or no clock data it returns "insufficient data" instead of guessing.
+
+## External services
+
+- Lichess games export (NDJSON/PGN). One request at a time, back off on HTTP 429.
+- chess.com public API: archives list, then monthly archives. Descriptive User-Agent.
+- Lichess puzzle database (CC0), downloaded by `npm run setup:puzzles`.
+- Anthropic API, optional, via `LlmProvider`.
+
+## Open questions
+
+See `docs/adr/` and the "Known risks" list in `docs/TASKS.md`.
