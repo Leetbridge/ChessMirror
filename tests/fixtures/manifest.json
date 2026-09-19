@@ -1,0 +1,167 @@
+{
+  "$comment": "Declared properties of the synthetic PGN fixtures in tests/fixtures/pgn. Every game here is synthetic (hand-written, verified legal with chess.js 1.4.0); none claims to be a real historic game. tests/golden/fixtures.test.ts verifies these declarations against chess.js. clocks: all = every ply has a [%clk], none = no [%clk], partial = some plies. plies is null when chess.js cannot parse the game (chessJsParses false). Material uses P1 N3 B3 R5 Q9, white minus black.",
+  "version": 1,
+  "files": [
+    {
+      "file": "pgn/short_fools_mate.pgn",
+      "purpose": "Shortest possible game (4 plies), ends in checkmate, integer-second clocks.",
+      "games": [
+        { "result": "0-1", "plies": 4, "clocks": "all", "clockedPlies": 4, "variant": null, "chessJsParses": true, "endsInCheckmate": true, "termination": "Normal", "timeControl": "180+0" }
+      ]
+    },
+    {
+      "file": "pgn/short_scholars_mate.pgn",
+      "purpose": "Short game (7 plies), checkmate, no clocks.",
+      "games": [
+        { "result": "1-0", "plies": 7, "clocks": "none", "clockedPlies": 0, "variant": null, "chessJsParses": true, "endsInCheckmate": true, "termination": "Normal", "timeControl": null }
+      ]
+    },
+    {
+      "file": "pgn/aborted_no_moves.pgn",
+      "purpose": "Aborted game with zero moves; result token is '*'. Must be skipped (nothing to analyse).",
+      "games": [
+        { "result": "*", "plies": 0, "clocks": "none", "clockedPlies": 0, "variant": null, "chessJsParses": true, "endsInCheckmate": false, "termination": "Abandoned", "timeControl": "300+0" }
+      ]
+    },
+    {
+      "file": "pgn/aborted_two_plies.pgn",
+      "purpose": "Game abandoned after 2 plies but awarded a result; too short to analyse.",
+      "games": [
+        { "result": "1-0", "plies": 2, "clocks": "all", "clockedPlies": 2, "variant": null, "chessJsParses": true, "endsInCheckmate": false, "termination": "Abandoned", "timeControl": "600+0" }
+      ]
+    },
+    {
+      "file": "pgn/clocks_resignation_chesscom_style.pgn",
+      "purpose": "20 plies, chess.com-style clocks with tenths ({[%clk 0:09:56.7]}), ending by resignation (chess.com Termination wording).",
+      "games": [
+        { "result": "1-0", "plies": 20, "clocks": "all", "clockedPlies": 20, "variant": null, "chessJsParses": true, "endsInCheckmate": false, "termination": "SyntheticWhite won by resignation", "timeControl": "600", "clockHasTenths": true }
+      ]
+    },
+    {
+      "file": "pgn/no_clocks_resignation.pgn",
+      "purpose": "20 plies, no clock comments at all, TimeControl '-', decisive result without checkmate.",
+      "games": [
+        { "result": "0-1", "plies": 20, "clocks": "none", "clockedPlies": 0, "variant": null, "chessJsParses": true, "endsInCheckmate": false, "termination": "Normal", "timeControl": "-" }
+      ]
+    },
+    {
+      "file": "pgn/ending_draw_agreed_clocks_eval.pgn",
+      "purpose": "16 plies, draw. Lichess-style comments that carry both [%eval] and [%clk] inside one comment, increment time control.",
+      "games": [
+        { "result": "1/2-1/2", "plies": 16, "clocks": "all", "clockedPlies": 16, "variant": null, "chessJsParses": true, "endsInCheckmate": false, "termination": "Normal", "timeControl": "300+3", "hasEvalComments": true }
+      ]
+    },
+    {
+      "file": "pgn/clocks_partial.pgn",
+      "purpose": "Clock comments on only 12 of 20 plies (missing-clock robustness).",
+      "games": [
+        { "result": "1/2-1/2", "plies": 20, "clocks": "partial", "clockedPlies": 12, "variant": null, "chessJsParses": true, "endsInCheckmate": false, "termination": "Normal", "timeControl": "300+0" }
+      ]
+    },
+    {
+      "file": "pgn/time_trouble_blunder_timeout.pgn",
+      "purpose": "Hero (White) burns clock, is under 10s from ply 33, hangs the queen at ply 37 (Qxg5 Rxg5), and loses on time.",
+      "games": [
+        {
+          "result": "0-1", "plies": 38, "clocks": "all", "clockedPlies": 38, "variant": null, "chessJsParses": true, "endsInCheckmate": false,
+          "termination": "Time forfeit", "timeControl": "300+0",
+          "hero": "w",
+          "heroClockUnder10FromPly": 33,
+          "heroMinClockSec": 3,
+          "heroBlunderPly": 37,
+          "materialLead": { "hero": "w", "peak": 3, "final": -11 }
+        }
+      ]
+    },
+    {
+      "file": "pgn/winning_position_thrown_away.pgn",
+      "purpose": "Hero (White) is +11 in material at ply 21 (opponent blundered the queen), then hangs the queen and more, ending -6 and losing.",
+      "games": [
+        {
+          "result": "0-1", "plies": 34, "clocks": "all", "clockedPlies": 34, "variant": null, "chessJsParses": true, "endsInCheckmate": false,
+          "termination": "SyntheticOpponent won by resignation", "timeControl": "600+0",
+          "hero": "w",
+          "materialLead": { "hero": "w", "peak": 11, "peakPly": 21, "final": -6 }
+        }
+      ]
+    },
+    {
+      "file": "pgn/lost_game_played_to_mate.pgn",
+      "purpose": "Hero (Black) is at least 5 points down from ply 15 (8+ from ply 21) and plays on (11 more moves) until checkmated: expected 'never resigns' behaviour, so a resignation detector must NOT fire.",
+      "games": [
+        {
+          "result": "1-0", "plies": 37, "clocks": "all", "clockedPlies": 37, "variant": null, "chessJsParses": true, "endsInCheckmate": true,
+          "termination": "Normal", "timeControl": "600+0",
+          "hero": "b",
+          "heroDeficitAtLeast5FromPly": 15,
+          "heroMovesAfterLost": 11,
+          "materialLead": { "hero": "b", "peak": 1, "final": -18 }
+        }
+      ]
+    },
+    {
+      "file": "pgn/variant_chess960_replayable.pgn",
+      "purpose": "Chess960 with [Variant \"Chess960\"], [SetUp], FEN with KQkq castling field (chess.js accepts it). Must be skipped by tag, not analysed.",
+      "games": [
+        { "result": "1-0", "plies": 4, "clocks": "all", "clockedPlies": 4, "variant": "Chess960", "chessJsParses": true, "endsInCheckmate": false, "termination": "Normal", "timeControl": "300+0" }
+      ]
+    },
+    {
+      "file": "pgn/variant_chess960_xfen.pgn",
+      "purpose": "Chess960 with X-FEN castling field 'HFhf'. chess.js 1.4.0 throws 'castling availability is invalid'. Variant tag check must run BEFORE parsing.",
+      "games": [
+        { "result": "1-0", "plies": null, "clocks": "none", "clockedPlies": 0, "variant": "Chess960", "chessJsParses": false, "endsInCheckmate": false, "termination": "Normal", "timeControl": "300+0" }
+      ]
+    },
+    {
+      "file": "pgn/variant_crazyhouse_drop.pgn",
+      "purpose": "Crazyhouse with drop moves (P@e6); chess.js cannot parse it. Move legality is NOT verified (no variant engine here); only the tag and unparseability are asserted.",
+      "games": [
+        { "result": "1-0", "plies": null, "clocks": "none", "clockedPlies": 0, "variant": "Crazyhouse", "chessJsParses": false, "endsInCheckmate": false, "termination": "Normal", "timeControl": "180+0" }
+      ]
+    },
+    {
+      "file": "pgn/variant_king_of_the_hill_legal_moves.pgn",
+      "purpose": "Variant tag 'King of the Hill' with moves that ARE legal standard chess: parses fine, so the skip must come from the tag.",
+      "games": [
+        { "result": "1-0", "plies": 6, "clocks": "none", "clockedPlies": 0, "variant": "King of the Hill", "chessJsParses": true, "endsInCheckmate": false, "termination": "Normal", "timeControl": "180+0" }
+      ]
+    },
+    {
+      "file": "pgn/odd_headers.pgn",
+      "purpose": "Header values with accents, CJK, brackets, semicolons, apostrophes, unknown values ('?', '????.??.??').",
+      "games": [
+        {
+          "result": "1-0", "plies": 4, "clocks": "none", "clockedPlies": 0, "variant": null, "chessJsParses": true, "endsInCheckmate": false, "termination": "Normal", "timeControl": null,
+          "headers": {
+            "Event": "Synthetic: Zürich; Łódź [test] 'quotes'",
+            "Site": "Ünïcödé, 東京",
+            "White": "José Núñez-Łukasiewicz",
+            "Black": "李 小龍 (Bruce) [bot]",
+            "Date": "????.??.??",
+            "WhiteElo": "?",
+            "BlackElo": "1500"
+          }
+        }
+      ]
+    },
+    {
+      "file": "pgn/odd_headers_escaped_quote.pgn",
+      "purpose": "Header values using the PGN-standard backslash-escaped quote (\\\"). chess.js 1.4.0 REJECTS this file (known limitation): the importer must pre-sanitise or handle the failure per game.",
+      "games": [
+        { "result": "1-0", "plies": null, "clocks": "none", "clockedPlies": 0, "variant": null, "chessJsParses": false, "endsInCheckmate": false, "termination": null, "timeControl": null }
+      ]
+    },
+    {
+      "file": "pgn/multi_game.pgn",
+      "purpose": "Five games in one file separated by blank lines: clocked mate, unclocked mate, Crazyhouse (unparseable), aborted no-move game, clocked draw.",
+      "games": [
+        { "result": "0-1", "plies": 4, "clocks": "all", "clockedPlies": 4, "variant": null, "chessJsParses": true, "endsInCheckmate": true, "termination": "Normal", "timeControl": "180+0" },
+        { "result": "1-0", "plies": 7, "clocks": "none", "clockedPlies": 0, "variant": null, "chessJsParses": true, "endsInCheckmate": true, "termination": "Normal", "timeControl": null },
+        { "result": "1-0", "plies": null, "clocks": "none", "clockedPlies": 0, "variant": "Crazyhouse", "chessJsParses": false, "endsInCheckmate": false, "termination": "Normal", "timeControl": null },
+        { "result": "*", "plies": 0, "clocks": "none", "clockedPlies": 0, "variant": null, "chessJsParses": true, "endsInCheckmate": false, "termination": "Abandoned", "timeControl": null },
+        { "result": "1/2-1/2", "plies": 8, "clocks": "all", "clockedPlies": 8, "variant": null, "chessJsParses": true, "endsInCheckmate": false, "termination": "Normal", "timeControl": "300+3" }
+      ]
+    }
+  ]
+}
