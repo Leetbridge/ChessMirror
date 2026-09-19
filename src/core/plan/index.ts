@@ -1,21 +1,21 @@
 import { PlanSchema, type Drill, type Finding, type Plan } from "../domain";
 
 /**
- * Lichess puzzle themes per habit. Detector ids are owned by habits/; keys are matched
- * as substrings so exact ids can differ. Theme names are Lichess puzzle themes.
+ * Lichess puzzle themes per detector, keyed by exact detector id (owned by habits/).
+ * Unknown ids get the generic fallback.
  */
-const THEME_MAP: { match: RegExp; themes: string[] }[] = [
-  { match: /time|clock/i, themes: ["hangingPiece", "oneMove", "short", "defensiveMove"] },
-  { match: /tilt/i, themes: ["hangingPiece", "short", "equality"] },
-  { match: /win|throw|convert/i, themes: ["advantage", "crushing", "endgame"] },
-  { match: /fast|quick|critical|rush/i, themes: ["fork", "pin", "discoveredAttack", "middlegame"] },
-  { match: /resign/i, themes: ["defensiveMove", "equality", "endgame"] },
-];
+const THEME_MAP: Readonly<Record<string, string[]>> = {
+  "time-trouble-blunders": ["hangingPiece", "oneMove", "short", "defensiveMove"],
+  "tilt-after-loss": ["hangingPiece", "short", "equality"],
+  "thrown-wins": ["advantage", "crushing", "endgame"],
+  "fast-critical-moves": ["fork", "pin", "discoveredAttack", "middlegame"],
+  "no-resignation": ["defensiveMove", "equality", "endgame"],
+};
 
 const FALLBACK_THEMES = ["advantage", "short"];
 
 export function themesForDetector(detector: string): string[] {
-  return THEME_MAP.find((m) => m.match.test(detector))?.themes ?? FALLBACK_THEMES;
+  return THEME_MAP[detector] ?? FALLBACK_THEMES;
 }
 
 export interface BuildPlanOptions {

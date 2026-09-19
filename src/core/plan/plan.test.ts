@@ -53,6 +53,12 @@ describe("buildPlan", () => {
     expect(empty.findingIds).toEqual([]);
     expect(empty.puzzleThemes).toEqual([]);
   });
+  it("matches detector ids exactly, not by substring", () => {
+    for (const id of ["time-trouble-blunders", "tilt-after-loss", "thrown-wins", "fast-critical-moves", "no-resignation"]) {
+      expect(themesForDetector(id)).not.toEqual(themesForDetector("unknown"));
+    }
+    expect(themesForDetector("my-time-thing")).toEqual(themesForDetector("unknown"));
+  });
   it("falls back to generic themes for unknown detectors", () => {
     expect(themesForDetector("something-new").length).toBeGreaterThan(0);
   });

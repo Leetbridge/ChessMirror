@@ -5,7 +5,7 @@ import { validateAdvice } from "../validate";
 import { resolveProvider } from "../registry";
 import { templateAdvice } from "../template";
 import { ctx } from "./fixtures";
-import { GENERIC_ADVICE, GOOD_ADVICE, fakeProvider } from "./fake-provider";
+import { GENERIC_ADVICE, GOOD_ADVICE, fakeProvider, inAliasSpace } from "./fake-provider";
 
 /**
  * Offline evals (fake provider) plus an optional live eval when ANTHROPIC_API_KEY is set.
@@ -51,7 +51,7 @@ describe.skipIf(!liveKey)("eval: live provider (needs ANTHROPIC_API_KEY)", () =>
 
 describe("eval: fallback still grounded when the model misbehaves", () => {
   it("generic output is not rejected by validation, so grounding is the guard the eval provides", async () => {
-    const r = await explainFindings(ctx, { provider: fakeProvider(() => GENERIC_ADVICE) });
+    const r = await explainFindings(ctx, { provider: fakeProvider(() => inAliasSpace(GENERIC_ADVICE, ctx)) });
     expect(r.source).toBe("llm");
     expect(checkGrounding(r.advice, ctx).ok).toBe(false);
   });

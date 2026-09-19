@@ -4,6 +4,9 @@ import type { CoachEnv } from "./registry";
 import { LlmError, type LlmProvider, type LlmRequest } from "./provider";
 
 export const DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-5";
+/** Per-request timeout in ms (SDK ClientOptions.timeout is in milliseconds). */
+export const REQUEST_TIMEOUT_MS = 60_000;
+export const MAX_RETRIES = 2;
 
 /** The subset of the SDK client we use; injectable for tests. */
 export interface AnthropicLike {
@@ -93,5 +96,5 @@ export function createAnthropicProvider(env: CoachEnv): LlmProvider | undefined 
   const apiKey = env["ANTHROPIC_API_KEY"];
   if (!apiKey) return undefined;
   const model = env["ANTHROPIC_MODEL"] || DEFAULT_ANTHROPIC_MODEL;
-  return new AnthropicProvider({ client: new Anthropic({ apiKey }), model });
+  return new AnthropicProvider({ client: new Anthropic({ apiKey, timeout: REQUEST_TIMEOUT_MS, maxRetries: MAX_RETRIES }), model });
 }

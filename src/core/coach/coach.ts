@@ -1,3 +1,4 @@
+import { aliasContext } from "./alias";
 import { CoachAdviceSchema, type CoachAdvice } from "./advice";
 import { detectedFindings, type CoachContext } from "./context";
 import { COACH_SYSTEM_PROMPT, buildCoachPrompt } from "./prompts";
@@ -38,11 +39,13 @@ export async function explainFindings(ctx: CoachContext, opts: ExplainOptions = 
   const provider = opts.provider ?? resolveProvider(opts.env ?? {});
   if (!provider) return template("no LLM provider configured");
 
+  // The LLM sees opaque game aliases only; real ids are restored after validation.
+  const { ctx: safe, restore } = aliasContext(ctx);
   let advice: CoachAdvice;
   try {
     advice = await provider.generate({
       system: COACH_SYSTEM_PROMPT,
-      prompt: buildCoachPrompt(ctx),
+      prompt: buildCoachPrompt(safe),
       schema: CoachAdviceSchema,
     });
   } catch (e) {
@@ -52,7 +55,7 @@ export async function explainFindings(ctx: CoachContext, opts: ExplainOptions = 
   const parsed = CoachAdviceSchema.safeParse(advice); // defensive: custom providers may skip validation
   if (!parsed.success) return template("provider output failed schema validation");
 
-  const check = validateAdvice(parsed.data, ctx);
+  const check = validateAdvice(parsed.data, safe);
   if (!check.ok) return template(`validation failed: ${check.reasons.join("; ")}`);
-  return { advice: parsed.data, source: "llm" };
+  return { advice: restore(parsed.data), source: "llm" };
 }

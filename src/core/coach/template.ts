@@ -7,18 +7,22 @@ import {
 } from "./context";
 import type { DetectedFinding } from "../domain";
 
-/** Detector ids are owned by habits/. Keys here are matched as substrings; unknown ids get the generic frame. */
-const DETECTOR_FRAMES: { match: RegExp; headline: string; frame: string }[] = [
-  { match: /time|clock/i, headline: "Mistakes when the clock is low", frame: "consistent with decisions being made under time pressure" },
-  { match: /tilt/i, headline: "Play after a loss", frame: "consistent with a change in play right after a defeat" },
-  { match: /win|throw|convert/i, headline: "Winning positions that slipped", frame: "consistent with difficulty converting an advantage" },
-  { match: /fast|quick|critical|rush/i, headline: "Fast moves in critical positions", frame: "consistent with moving quickly when the position needed more thought" },
-  { match: /resign/i, headline: "Playing on in lost games", frame: "consistent with a reluctance to end lost games" },
-];
+/** Keyed by exact detector id (owned by habits/). Unknown ids get the generic frame. */
+const DETECTOR_FRAMES: Readonly<Record<string, { headline: string; frame: string }>> = {
+  "time-trouble-blunders": { headline: "Mistakes when the clock is low", frame: "consistent with decisions being made under time pressure" },
+  "tilt-after-loss": { headline: "Play after a loss", frame: "consistent with a change in play right after a defeat" },
+  "thrown-wins": { headline: "Winning positions that slipped", frame: "consistent with difficulty converting an advantage" },
+  "fast-critical-moves": { headline: "Fast moves in critical positions", frame: "consistent with moving quickly when the position needed more thought" },
+  "no-resignation": { headline: "Playing on in lost games", frame: "consistent with a reluctance to end lost games" },
+};
 
 function frameFor(detector: string): { headline: string; frame: string } {
-  const hit = DETECTOR_FRAMES.find((d) => d.match.test(detector));
-  return hit ?? { headline: `Pattern: ${detector}`, frame: "consistent with a recurring pattern in your games" };
+  return (
+    DETECTOR_FRAMES[detector] ?? {
+      headline: `Pattern: ${detector}`,
+      frame: "consistent with a recurring pattern in your games",
+    }
+  );
 }
 
 function describeMove(m: EngineMoveRef): string {

@@ -9,3 +9,4 @@ export { templateAdvice } from "./template";
 export { validateAdvice, extractMoveTokens, findEmotionClaim, hasHedge } from "./validate";
 export { COACH_SYSTEM_PROMPT, buildCoachPrompt } from "./prompts";
 export { checkGrounding } from "./grounding";
+export { aliasContext } from "./alias";

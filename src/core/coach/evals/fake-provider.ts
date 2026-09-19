@@ -1,4 +1,6 @@
 import type { CoachAdvice } from "../advice";
+import { aliasContext } from "../alias";
+import type { CoachContext } from "../context";
 import { LlmError, type LlmProvider, type LlmRequest } from "../provider";
 
 /** Offline provider returning a canned response. Bypasses schema parsing on purpose (simulates a lax provider). */
@@ -71,3 +73,20 @@ export const GENERIC_ADVICE: CoachAdvice = {
     },
   ],
 };
+
+/** Rewrite real game ids to the opaque aliases the prompt exposes, as a real model would answer in. */
+export function inAliasSpace(advice: CoachAdvice, ctx: CoachContext): CoachAdvice {
+  const aliased = aliasContext(ctx).ctx;
+  const map = new Map(ctx.games.map((g, i) => [g.id, aliased.games[i]?.id ?? g.id]));
+  const sub = (t: string): string => [...map].reduce((acc, [id, a]) => acc.split(id).join(a), t);
+  return {
+    summary: sub(advice.summary),
+    findings: advice.findings.map((f) => ({
+      ...f,
+      headline: sub(f.headline),
+      explanation: sub(f.explanation),
+      whatToDo: sub(f.whatToDo),
+      citedRefs: f.citedRefs.map((r) => ({ gameId: map.get(r.gameId) ?? r.gameId, ply: r.ply })),
+    })),
+  };
+}
