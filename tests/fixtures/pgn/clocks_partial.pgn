@@ -1,0 +1,15 @@
+[Event "Synthetic fixture"]
+[Site "chessmirror-fixtures"]
+[Date "2026.01.01"]
+[Round "-"]
+[White "SyntheticWhite"]
+[Black "SyntheticBlack"]
+[Result "1/2-1/2"]
+[TimeControl "300+0"]
+[Termination "Normal"]
+
+1. e4 e5 {[%clk 0:04:54]} 2. Nf3 {[%clk 0:04:48]} Nc6 3. Bc4 {[%clk 0:04:42]}
+Bc5 {[%clk 0:04:42]} 4. c3 Nf6 {[%clk 0:04:36]} 5. d3 {[%clk 0:04:30]} d6 6. O-O
+{[%clk 0:04:24]} O-O {[%clk 0:04:24]} 7. Re1 a6 {[%clk 0:04:18]} 8. Bb3
+{[%clk 0:04:12]} Ba7 9. h3 {[%clk 0:04:06]} h6 {[%clk 0:04:06]} 10. Nbd2 Re8
+1/2-1/2

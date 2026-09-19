@@ -1,0 +1,12 @@
+[Event "Synthetic fixture"]
+[Site "chessmirror-fixtures"]
+[Date "2026.01.01"]
+[Round "-"]
+[White "SyntheticWhite"]
+[Black "SyntheticBlack"]
+[Result "0-1"]
+[TimeControl "180+0"]
+[Termination "Normal"]
+
+1. f3 {[%clk 0:02:58]} e5 {[%clk 0:02:58]} 2. g4 {[%clk 0:02:56]} Qh4#
+{[%clk 0:02:56]} 0-1

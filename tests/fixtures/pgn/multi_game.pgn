@@ -1,0 +1,64 @@
+[Event "Synthetic fixture"]
+[Site "chessmirror-fixtures"]
+[Date "2026.01.01"]
+[Round "-"]
+[White "SyntheticA"]
+[Black "SyntheticB"]
+[Result "0-1"]
+[TimeControl "180+0"]
+[Termination "Normal"]
+
+1. f3 {[%clk 0:02:58]} e5 {[%clk 0:02:58]} 2. g4 {[%clk 0:02:56]} Qh4#
+{[%clk 0:02:56]} 0-1
+
+
+[Event "Synthetic fixture"]
+[Site "chessmirror-fixtures"]
+[Date "2026.01.01"]
+[Round "-"]
+[White "SyntheticC"]
+[Black "SyntheticD"]
+[Result "1-0"]
+[Termination "Normal"]
+
+1. e4 e5 2. Bc4 Nc6 3. Qh5 Nf6 4. Qxf7# 1-0
+
+
+[Event "Synthetic fixture"]
+[Site "chessmirror-fixtures"]
+[Date "2026.01.01"]
+[Round "-"]
+[White "SyntheticE"]
+[Black "SyntheticF"]
+[Result "1-0"]
+[Variant "Crazyhouse"]
+[Termination "Normal"]
+
+1. e4 d5 2. exd5 Qxd5 3. Nc3 Qa5 4. P@e6 1-0
+
+
+[Event "Synthetic fixture"]
+[Site "chessmirror-fixtures"]
+[Date "2026.01.01"]
+[Round "-"]
+[White "SyntheticG"]
+[Black "SyntheticH"]
+[Result "*"]
+[Termination "Abandoned"]
+
+*
+
+
+[Event "Synthetic fixture"]
+[Site "chessmirror-fixtures"]
+[Date "2026.01.01"]
+[Round "-"]
+[White "SyntheticI"]
+[Black "SyntheticJ"]
+[Result "1/2-1/2"]
+[TimeControl "300+3"]
+[Termination "Normal"]
+
+1. e4 {[%clk 0:04:58]} e5 {[%clk 0:04:58]} 2. Nf3 {[%clk 0:04:56]} Nc6
+{[%clk 0:04:56]} 3. Bb5 {[%clk 0:04:54]} a6 {[%clk 0:04:54]} 4. Ba4
+{[%clk 0:04:52]} Nf6 {[%clk 0:04:52]} 1/2-1/2

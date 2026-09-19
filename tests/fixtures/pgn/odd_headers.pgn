@@ -1,0 +1,13 @@
+[Event "Synthetic: Zürich; Łódź [test] 'quotes'"]
+[Site "Ünïcödé, 東京"]
+[Date "????.??.??"]
+[Round "-"]
+[White "José Núñez-Łukasiewicz"]
+[Black "李 小龍 (Bruce) [bot]"]
+[Result "1-0"]
+[WhiteElo "?"]
+[BlackElo "1500"]
+[Termination "Normal"]
+[Opening "C44: King's Pawn; Open ({test})"]
+
+1. e4 e5 2. Nf3 Nc6 1-0

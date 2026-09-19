@@ -1,0 +1,22 @@
+[Event "Synthetic fixture"]
+[Site "chessmirror-fixtures"]
+[Date "2026.01.01"]
+[Round "-"]
+[White "SyntheticHero"]
+[Black "SyntheticOpponent"]
+[Result "0-1"]
+[TimeControl "600+0"]
+[Termination "SyntheticOpponent won by resignation"]
+
+1. e4 {[%clk 0:09:52]} e5 {[%clk 0:09:51]} 2. Nf3 {[%clk 0:09:42]} Nc6
+{[%clk 0:09:40]} 3. Bc4 {[%clk 0:09:30]} Bc5 {[%clk 0:09:27]} 4. c3
+{[%clk 0:09:22]} Qf6 {[%clk 0:09:18]} 5. d4 {[%clk 0:09:12]} exd4
+{[%clk 0:09:07]} 6. cxd4 {[%clk 0:09:00]} Bb4+ {[%clk 0:08:54]} 7. Nc3
+{[%clk 0:08:52]} Qxd4 {[%clk 0:08:45]} 8. Nxd4 {[%clk 0:08:42]} Nxd4
+{[%clk 0:08:34]} 9. Qxd4 {[%clk 0:08:30]} Bxc3+ {[%clk 0:08:21]} 10. bxc3
+{[%clk 0:08:22]} Nf6 {[%clk 0:08:12]} 11. Qxf6 {[%clk 0:08:12]} gxf6
+{[%clk 0:08:01]} 12. Ba3 {[%clk 0:08:00]} d6 {[%clk 0:07:48]} 13. Bxf7+
+{[%clk 0:07:52]} Kxf7 {[%clk 0:07:39]} 14. Bxd6 {[%clk 0:07:42]} cxd6
+{[%clk 0:07:28]} 15. Rb1 {[%clk 0:07:30]} b6 {[%clk 0:07:15]} 16. Rb5
+{[%clk 0:07:22]} Rd8 {[%clk 0:07:06]} 17. Rxb6 {[%clk 0:07:12]} axb6
+{[%clk 0:06:55]} 0-1
