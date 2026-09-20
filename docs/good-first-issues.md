@@ -1,6 +1,6 @@
 # Good first issues
 
-Ten starter tickets, written against the planned structure in ARCHITECTURE.md and docs/TASKS.md. Some touch files that other v0 tasks are still creating: check the current tree and open PRs before starting, and coordinate to avoid conflicts. Always run `npm run typecheck && npm run lint && npm test` before opening a PR.
+Ten starter tickets, checked against the merged v0 code. Check open PRs before starting to avoid duplicate work. Always run `npm run typecheck && npm run lint && npm test` before opening a PR.
 
 ## 1. Add a `.nvmrc` and document the Node version
 - **Description:** `package.json` requires Node >= 20 but there is no version file for nvm/fnm users.
@@ -17,37 +17,37 @@ Ten starter tickets, written against the planned structure in ARCHITECTURE.md an
 - **Acceptance criteria:** at least one failing-input test per schema listed; all tests pass.
 - **Files:** `src/core/domain/domain.test.ts`
 
-## 4. Centipawn to win% function
-- **Description:** Implement a pure function converting centipawns (White's point of view) to the mover's winning chances 0 to 100 for the `classify` module. State the formula and its source in a code comment; if you cannot verify the source, say so in the PR rather than guessing.
-- **Acceptance criteria:** pure function with no I/O; returns values in [0, 100]; 0 cp gives 50; monotonic; tests cover symmetry and extreme values; exported from the module index.
-- **Files:** `src/core/classify/win-percent.ts`, `src/core/classify/win-percent.test.ts`, `src/core/classify/index.ts`
+## 4. Document the habit detectors and their thresholds
+- **Description:** Write `docs/detectors.md` explaining each of the five detectors in plain language: what it looks at, the soft skill it maps to, the thresholds in `src/core/habits/constants.ts`, and its known limits (see `docs/KNOWN-LIMITATIONS.md`). Keep the hypothesis wording; do not claim emotion detection.
+- **Acceptance criteria:** every constant in `constants.ts` is explained or linked; each detector lists what data it needs before it returns `insufficient_data`; README links to it.
+- **Files:** `docs/detectors.md`, `README.md`
 
-## 5. Game phase helper
-- **Description:** Add a pure function returning `"opening" | "middlegame" | "endgame"` (the `GamePhase` type in domain) for a position or move number. Document the heuristic you choose.
-- **Acceptance criteria:** returns a valid `GamePhase`; tests for a start position, a queenless late position and a mid-game position; no imports outside `domain` (ESLint boundaries pass).
-- **Files:** `src/core/classify/phase.ts`, `src/core/classify/phase.test.ts`
+## 5. Golden test for a stalemate game
+- **Description:** The QA fixtures have no stalemate ending (noted as a gap). Add a synthetic, clearly labelled stalemate PGN, add it to `tests/fixtures/manifest.json`, and assert the classifier and importer handle it (no engine eval for terminal positions).
+- **Acceptance criteria:** fixture starts its `[Event]` with "Synthetic"; manifest entry validated by the existing golden test; a classify or import test uses it; all tests pass.
+- **Files:** `tests/fixtures/pgn/`, `tests/fixtures/manifest.json`, `tests/fixtures/README.md`, `src/core/classify/classify.test.ts`
 
-## 6. Clock extraction from PGN comments
-- **Description:** Lichess PGNs carry clock times in move comments in the form `[%clk H:MM:SS]`. Write a parser that extracts seconds per ply and returns "no clock data" when absent. Verify the format against a real exported game first.
-- **Acceptance criteria:** parses a fixture with clocks; returns an explicit absent result for a PGN without clocks; malformed values do not throw; tests included.
-- **Files:** `src/core/classify/clock.ts`, `src/core/classify/clock.test.ts`, fixture under `tests/fixtures/`
+## 6. Document all environment variables
+- **Description:** `.env.example` lists the variables but the README does not explain them. Add a table covering `STOCKFISH_PATH`, `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, `DATABASE_PATH`, `PUZZLES_DATABASE_PATH`, `CHESSCOM_USER_AGENT`, `CHESSMIRROR_MOCK`, `CHESSMIRROR_DEPTH` and `CHESSMIRROR_MAX_GAMES` with defaults and valid ranges taken from the code.
+- **Acceptance criteria:** defaults and ranges match `src/app/lib/pipeline.ts` and `storage.ts`; a variable missing from `.env.example` is added there; no real secrets.
+- **Files:** `README.md`, `.env.example`
 
-## 7. PGN import with a golden fixture
-- **Description:** Using chess.js (see ADR 0001 for the stack), parse a PGN string into `Game[]` validated with `GameSchema`. Reject or skip invalid games with a clear error instead of crashing.
-- **Acceptance criteria:** a multi-game PGN yields the right number of games; a truncated PGN yields a typed error; output passes `GameSchema`; no network access.
-- **Files:** `src/core/import/pgn.ts`, `src/core/import/pgn.test.ts`, `tests/fixtures/`
+## 7. Tilt detector: show time controls in the evidence
+- **Description:** `tilt-after-loss` does not normalise for time control (see KNOWN-LIMITATIONS). As a first step, add the time control of each cited game to the evidence `note` so the user can spot mixed bullet and slower games.
+- **Acceptance criteria:** evidence notes include the time control when known; no change to detection thresholds; existing tests updated and a new test covers a game with no time control.
+- **Files:** `src/core/habits/detectors.ts`, `src/core/habits/detectors.test.ts`
 
-## 8. Stockfish path validation with a clear error
-- **Description:** Add a function that reads `STOCKFISH_PATH`, checks the file exists and is executable, and throws a descriptive error naming the variable and linking to the README quickstart.
-- **Acceptance criteria:** missing env var, nonexistent path and non-executable path each produce distinct error messages; tests use a temp file; the module does not spawn Stockfish.
-- **Files:** `src/core/engine/path.ts`, `src/core/engine/path.test.ts`, `src/core/engine/index.ts`
+## 8. Add a manual chess.com smoke-test note and script flag
+- **Description:** chess.com import has only been tested with recorded fixtures. Document how to run `npm run analyze -- chesscom <user> 5` with a valid `CHESSCOM_USER_AGENT`, and report what happens on an unknown username and on a rate-limit response.
+- **Acceptance criteria:** README section with the exact command; the observed behaviour (from a real run) is recorded in the PR; no code change unless a bug is found.
+- **Files:** `README.md`, `docs/troubleshooting.md`
 
-## 9. Hypothesis-wording lint helper
-- **Description:** Add a function that flags coach or finding text that states emotions as fact (for example "you were angry" or "you tilted") instead of hypothesis wording ("consistent with", "may suggest"). Keep the phrase list small and in one exported constant.
-- **Acceptance criteria:** returns a list of offending phrases; passes on hypothesis-worded text; tests for both; documented in a code comment.
-- **Files:** `src/core/coach/wording.ts`, `src/core/coach/wording.test.ts`, `src/core/coach/index.ts`
+## 9. Share the emotion-claim phrase list
+- **Description:** The emotion-claim regexes live in `src/core/coach/validate.ts`, and `src/core/habits` has its own wording scan in its tests. Extract one exported constant so both use the same list, without breaking the `habits` to `domain`-only boundary (put it in `domain` if needed).
+- **Acceptance criteria:** one source of truth; coach validation and habit tests both use it; ESLint boundaries pass; tests for a claim phrase and a hypothesis-worded sentence.
+- **Files:** `src/core/coach/validate.ts`, `src/core/habits/text.test.ts`, `src/core/domain/`
 
-## 10. Empty and loading states for the dashboard page
-- **Description:** `src/app/page.tsx` is a placeholder. Add a simple "no games imported yet" state that explains what to do and that ChessMirror shows hypotheses, not emotion detection.
-- **Acceptance criteria:** page renders without errors; copy uses hypothesis wording; no core imports needed; `npm run build` succeeds.
-- **Files:** `src/app/page.tsx`
+## 10. Add a "clear old results" npm script
+- **Description:** Finished results are kept as JSON files with an automatic 200-file / 30-day rule. Add `npm run clean:results` that deletes result files older than N days (default 7, `--days` flag) from the results directory next to `DATABASE_PATH`, printing what it removed.
+- **Acceptance criteria:** only touches `*.json` files with UUID names inside the results directory; `--dry-run` flag; tests on a temp directory.
+- **Files:** `scripts/clean-results.ts`, `package.json`, `src/app/lib/storage.ts`
