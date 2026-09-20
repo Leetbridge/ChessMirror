@@ -1,4 +1,5 @@
 import { openPuzzleStore, openRepository, databasePath, puzzlesPath, type ResultStore } from "./storage";
+import { findStockfish } from "./stockfish-path";
 import { readConfig, runPipeline, toUserMessage, type PipelineDeps } from "./pipeline";
 import { JobStateSchema, ServiceBusyError, type AnalysisService, type ImportRequest, type JobState } from "./types";
 
@@ -9,11 +10,16 @@ export const MAX_JOBS = 50;
 export type DepsFactory = () => PipelineDeps;
 
 /** Deps read from process.env at job start, so env changes apply without a restart. */
+function withStockfish(config: ReturnType<typeof readConfig>, env: Record<string, string | undefined>) {
+  // STOCKFISH_PATH wins; otherwise look on PATH and in common install folders.
+  return config.stockfishPath ? config : { ...config, stockfishPath: findStockfish(env) };
+}
+
 export function envDeps(env: NodeJS.ProcessEnv = process.env): PipelineDeps {
   const repository = openRepository(databasePath(env));
   const puzzleStore = openPuzzleStore(puzzlesPath(env));
   return {
-    config: readConfig(env),
+    config: withStockfish(readConfig(env), env),
     env,
     repository,
     ...(puzzleStore ? { puzzleStore } : {}),

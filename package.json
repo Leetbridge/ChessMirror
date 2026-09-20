@@ -15,6 +15,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "setup:puzzles": "tsx scripts/setup-puzzles.mjs",
+    "doctor": "tsx --env-file-if-exists=.env scripts/doctor.ts",
     "analyze": "tsx --env-file-if-exists=.env scripts/run-analysis.ts"
   },
   "dependencies": {

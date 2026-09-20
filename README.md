@@ -29,7 +29,8 @@ npm ci
 cp .env.example .env
 ```
 
-1. **Install Stockfish separately** (with your package manager or from the official Stockfish site) and set `STOCKFISH_PATH` in `.env` to the binary. Stockfish is GPL, so ChessMirror does not bundle or vendor it (see [ADR 0002](docs/adr/0002-external-stockfish.md)).
+1. **Install Stockfish separately** (it is only needed for real analysis, not for tests or `CHESSMIRROR_MOCK=1`). For example `brew install stockfish` on macOS or `sudo apt install stockfish` on Debian/Ubuntu; on Windows download it from the official Stockfish site. ChessMirror finds it on your `PATH` or in common install folders automatically; set `STOCKFISH_PATH` in `.env` only if it lives somewhere else (an explicit value always wins). Stockfish is GPL, so ChessMirror does not bundle or vendor it (see [ADR 0002](docs/adr/0002-external-stockfish.md)).
+   Run `npm run doctor` to check your Node version, Stockfish, `zstd` and optional pieces, with install hints for anything missing.
 2. `ANTHROPIC_API_KEY` is **optional**. Leave it empty and explanations use a template fallback.
 3. Set `CHESSCOM_USER_AGENT` in `.env` to something descriptive with your own contact.
 4. **Optional, for puzzle drills:** `npm run setup:puzzles` downloads the Lichess puzzle database (about 290 MiB) and indexes a subset locally. It needs the system `zstd` binary (`brew install zstd` or `apt install zstd`) on Node 20; newer Node versions with built-in zstd support also work. Use `-- --limit 300000` for a quick sample. `better-sqlite3` is a native module: `npm ci` downloads a prebuilt binary, or compiles it with node-gyp if none matches (then a C++ toolchain and Python are needed). See [ADR 0004](docs/adr/0004-puzzle-source.md).
