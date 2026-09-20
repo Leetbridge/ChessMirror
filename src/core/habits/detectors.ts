@@ -179,6 +179,9 @@ export const fastCriticalMoves: HabitDetector = (games) => {
   const id = "fast-critical-moves";
   const withClock = games.filter(hasClockData);
   // "Fast" only makes sense relative to the time control; skip bullet and unknown time controls.
+  if (withClock.length < C.MIN_CLOCKED_GAMES) {
+    return insufficient(id, `Needs at least ${C.MIN_CLOCKED_GAMES} games with clock data; found ${withClock.length}.`);
+  }
   const clocked = withClock.filter((g) => fastMoveMs(g) !== undefined);
   if (clocked.length < C.MIN_CLOCKED_GAMES) {
     return insufficient(

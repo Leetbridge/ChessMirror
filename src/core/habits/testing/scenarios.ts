@@ -100,13 +100,13 @@ export const RAPID: TC = { initialSec: 900, incrementSec: 10 };
  * 6 games: 20 calm moves then 2 errors. Spent time per error is configurable; `before` is the win% before the error.
  * `tc` defaults to 10+0; use BULLET (calm moves then take 0.5s each) or RAPID.
  */
-export function fastScenario(errorSpentMs: number, errorBefore = 50, tc?: TC): AnalyzedGame[] {
+export function fastScenario(errorSpentMs: number, errorBefore = 50, tc?: TC | null): AnalyzedGame[] {
   const calmSpent = tc ? Math.min(10_000, (tc.initialSec * 1000 * 0.4) / 20) : 10_000;
   return range(6).map((i) =>
     buildGame({
       id: id("fast", i),
       result: "black",
-      ...(tc ? { timeControl: tc } : {}),
+      ...(tc !== undefined ? { timeControl: tc } : {}),
       moves: [
         ...calmMoves(20, 50, calmSpent),
         { winPct: errorBefore - 25, before: errorBefore, cls: "blunder", spentMs: errorSpentMs },
