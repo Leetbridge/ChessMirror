@@ -18,3 +18,7 @@ export interface Repository {
 
   close(): Promise<void>;
 }
+
+export { createSqliteRepository } from "./sqlite-repository";
+export { createSqlitePuzzleStore } from "./puzzle-store";
+export type { PuzzleQuery, PuzzleStore, ThemeCount } from "./puzzle-store";
