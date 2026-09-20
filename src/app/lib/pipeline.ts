@@ -5,8 +5,9 @@ import { EngineError, EngineNotFoundError, UciEngine, type EngineAnalyzer } from
 import { detectHabits } from "../../core/habits";
 import { ChessComSource, HttpError, LichessSource, parsePgnText, splitPgn, type FetchLike } from "../../core/import";
 import { buildPlan } from "../../core/plan";
-import type { Repository } from "../../core/store";
+import type { PuzzleStore, Repository } from "../../core/store";
 import { createMemoryRepository } from "./memory-repository";
+import { attachPuzzles, estimateRating } from "./puzzles";
 import { ResultSchema, type AnalysisResult, type ImportRequest, type Progress } from "./types";
 
 export const DEFAULT_DEPTH = 12;
@@ -58,6 +59,10 @@ export interface PipelineDeps {
   /** Defaults to a UciEngine on config.stockfishPath. Closed when the run ends. */
   createEngine?: () => NamedEngine;
   repository?: Repository;
+  /** Read-only puzzle index; when absent the result says puzzles are unavailable. */
+  puzzleStore?: PuzzleStore;
+  /** Called by whoever owns the resources (service or CLI) after the run, to close repository and puzzle store. */
+  release?: () => void | Promise<void>;
   /** Explicit LLM provider (tests). Otherwise resolved from env; template when none. */
   provider?: LlmProvider;
   now?: () => Date;
@@ -223,6 +228,8 @@ export async function runPipeline(request: ImportRequest, deps: PipelineDeps): P
       gamesAnalyzed: analyzed.length,
       findings,
       plan,
+      puzzlesAvailable: deps.puzzleStore !== undefined,
+      ...(deps.puzzleStore ? { drillPuzzles: attachPuzzles(plan, deps.puzzleStore, estimateRating(analyzed)) } : {}),
       ...(imported.assumedPlayer ? { assumedPlayer: imported.assumedPlayer } : {}),
     });
     return { result, analyzed, skipped, summary: coach.advice.summary, coachSource: coach.source };

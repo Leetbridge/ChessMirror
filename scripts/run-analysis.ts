@@ -10,7 +10,8 @@
  * CHESSCOM_USER_AGENT (chess.com only), ANTHROPIC_API_KEY (optional, otherwise template text).
  */
 import { PgnFileError, readPgnFile } from "../src/app/lib/pgn-file";
-import { readConfig, runPipeline, toUserMessage } from "../src/app/lib/pipeline";
+import { envDeps } from "../src/app/lib/real-service";
+import { runPipeline, toUserMessage } from "../src/app/lib/pipeline";
 import { ImportRequestSchema, type ImportRequest } from "../src/app/lib/types";
 
 async function main(): Promise<number> {
@@ -35,7 +36,8 @@ async function main(): Promise<number> {
   }
   const request: ImportRequest = parsed.data;
 
-  const config = readConfig(process.env);
+  const base = envDeps(process.env);
+  const config = base.config;
   if (max !== undefined) {
     const n = Number(max);
     if (!Number.isInteger(n) || n < 1 || n > 200) {
@@ -47,8 +49,7 @@ async function main(): Promise<number> {
 
   try {
     const out = await runPipeline(request, {
-      config,
-      env: process.env,
+      ...base,
       onProgress: (p) => console.error(`[${p.stage}] ${p.done}/${p.total}`),
       onSkip: (id, reason) => console.error(`skipped ${id}: ${reason}`),
     });
@@ -63,6 +64,8 @@ async function main(): Promise<number> {
           summary: out.summary,
           findings: out.result.findings,
           plan: out.result.plan,
+          puzzlesAvailable: out.result.puzzlesAvailable,
+          drillPuzzles: out.result.drillPuzzles,
         },
         null,
         2,
@@ -73,6 +76,8 @@ async function main(): Promise<number> {
     console.error(toUserMessage(e, request.source));
     if (process.env["DEBUG"]) console.error(e);
     return 1;
+  } finally {
+    await base.release?.();
   }
 }
 
