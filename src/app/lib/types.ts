@@ -42,6 +42,8 @@ export const ResultSchema = z.object({
   gamesAnalyzed: z.number().int().nonnegative(),
   findings: z.array(FindingSchema),
   plan: PlanSchema,
+  /** Pasted PGN only: the player the analysis assumed to be the user (guessed from the games). */
+  assumedPlayer: z.string().min(1).max(40).optional(),
 });
 export type AnalysisResult = z.infer<typeof ResultSchema>;
 
