@@ -1,7 +1,7 @@
 /**
  * Grounding test: the engine is truth, the LLM is teacher.
  *
- * Principle under test (CLAUDE.md): the LLM must never introduce a chess move that is not in
+ * Principle under test (see ARCHITECTURE.md, principle 2): the LLM must never introduce a chess move that is not in
  * the engine/analysis output. This drives the real chain
  *   PGN fixture -> parsePgnText -> getPositions -> (scripted) engine -> classifyGame -> detectHabits
  *   -> buildCoachContext -> explainFindings (mocked LlmProvider)
