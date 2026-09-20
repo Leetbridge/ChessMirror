@@ -273,6 +273,25 @@ const REJECTED: Payload[] = [
   { label: "sacrifice phrase", text: "sacrifice the exchange with the rook" },
   { label: "file pawn advance", text: "the h-pawn advances" },
   { label: "spelled-out square (e four)", text: "e four" },
+  // --- reviewer round 2 ---
+  { label: "stroked letter (d-bar 4)", text: "\u01114" },
+  { label: "stroked letter (h-bar 5)", text: "\u01275" },
+  { label: "slash separator", text: "e/4" },
+  { label: "middle-dot separator", text: "e\u00b74" },
+  { label: "full-width comma separator", text: "e\uff0c4" },
+  { label: "parenthesised rank", text: "e(4)" },
+  { label: "a-file spelled squares", text: "a two to a four" },
+  { label: "ordinal square", text: "e fourth" },
+  { label: "roman-numeral square", text: "e IV" },
+  { label: "Spanish digit word square", text: "e cuatro" },
+  { label: "figurine glyph", text: "\u2658\u265b" },
+  { label: "piece word, no verb (bishop retreats)", text: "the bishop retreats" },
+  { label: "piece word (knight jumps in)", text: "knight jumps in" },
+  { label: "promotion prose", text: "promote to a queen" },
+  { label: "underpromotion", text: "underpromotion" },
+  { label: "en passant", text: "en passant" },
+  { label: "mate in N", text: "mate in three" },
+  { label: "discovered check", text: "discovered check" },
 ];
 
 // ---------------------------------------------------------------------------------------------

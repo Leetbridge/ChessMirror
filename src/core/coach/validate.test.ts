@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { COACH_SYSTEM_PROMPT } from "./prompts";
-import { containsMoveLikeContent, moveLikeReasons, normalizeForMoveScan, validateAdvice } from "./validate";
+import { MAX_REFERENCED_MOVES, containsMoveLikeContent, moveLikeReasons, normalizeForMoveScan, referencedMovesByFinding, validateAdvice } from "./validate";
 import { GOOD_ADVICE } from "./evals/fake-provider";
 import { ctx } from "./evals/fixtures";
 import type { CoachAdvice } from "./advice";
@@ -50,6 +50,54 @@ const MUST_FLAG: Record<string, string[]> = {
   ],
   "file pawn + movement verb": ["push the h-pawn two squares", "the h-pawn advances", "the g-pawn storm", "the h file pawn marches"],
   "spelled-out squares": ["knight to f five", "e four", "the g-file: g three", "h eight"],
+  "REQUIRED 2a: stroked and other non-ASCII letters (no NFKD decomposition)": ["đ4", "ħ5", "ø3", "ł2", "ð4", "þ5", "ß3", "ı4"],
+  "REQUIRED 2b: any punctuation or symbol between file and rank": ["e/4", "e·4", "e*4", "e，4", "e(4)", "e|4", "e\\4", "e~4", "e^4", "e=4", "e<4", "e:4", "e;4", "e,4", "Ne/4", "N e * 4", "e ( 4 )", "e\u20ac4"],
+  "REQUIRED 2c: spelled-out squares beyond plain digit words": [
+    "a two to a four",
+    "a two to e four",
+    "a two takes",
+    "a two, then it goes to",
+    "a-one at some point",
+    "e fourth",
+    "the h fifth",
+    "e IV",
+    "c iii",
+    "g VIII",
+    "e cuatro",
+    "e quatre",
+    "d vier",
+    "b tres",
+    "c trois",
+    "f acht",
+    "e dva",
+  ],
+  "REQUIRED 2d: figurine glyphs": ["\u2658", "\u265B", "\u2654\u2655\u2656\u2657\u2658\u2659", "\u265F", "\u{1FA00}", "then \u2658 moves"],
+  "REQUIRED 2e: piece words alone, no verb, plural and possessive, several languages": [
+    "the bishop retreats",
+    "knight jumps in",
+    "the queen trade",
+    "promote to a queen",
+    "the queen's position",
+    "both rooks",
+    "kings and pawns",
+    "queenside",
+    "kingside",
+    "the Springer",
+    "die Laeufer",
+    "el alfil",
+    "la reina",
+    "le roi",
+    "la tour",
+    "the slon",
+    "peshka",
+    "promotion",
+    "underpromotion",
+    "promotes",
+    "en passant",
+    "mate in 3",
+    "mate in three",
+    "discovered check",
+  ],
 };
 
 /** Ordinary coaching text that is grounded in data and must not trip the strict rule. */
@@ -61,10 +109,22 @@ const MUST_PASS = [
   "In game-1 and game-2 (ply 41), the clock read 4s.",
   "Your play after a loss changed in 2 of 3 games, which may suggest a pattern.",
   "Take a two minute break, then review the evidence listed below.",
+  "This is consistent with a three-game losing streak.",
+  "It may suggest a two game losing streak across the sample.",
+  "The work is done and gone; 4 of 5 games had under 10s left.",
+  "In game-3 at ply 41 you had 6s left, which may suggest time pressure.",
+  "The pattern appeared in 12 positions and 3 games.",
 ];
 
 /** Known, accepted false positives: they only cause a template fallback. Documented so a change is deliberate. */
-const KNOWN_FALSE_POSITIVES = ["B2B", "over a 3 game streak", "ply 31. Both games", "see H1 report"];
+const KNOWN_FALSE_POSITIVES = [
+  "B2B",
+  "over a 3 game streak",
+  "ply 31. Both games",
+  "see H1 report",
+  "a tour of the data",
+  "a three-game streak at ply 31",
+];
 
 describe("containsMoveLikeContent: every rule", () => {
   for (const [rule, payloads] of Object.entries(MUST_FLAG)) {
@@ -84,6 +144,7 @@ describe("containsMoveLikeContent: every rule", () => {
   });
   it("names the rule that fired", () => {
     expect(moveLikeReasons("castle")).toEqual(["castling word"]);
+    expect(moveLikeReasons("the queen")).toEqual(["piece word"]);
     expect(moveLikeReasons("Nf3")).toContain("square");
   });
 });
@@ -122,76 +183,78 @@ const ALPHABET: string[] = [
   "Ａ", "ｂ", "ｃ", "ｄ", "ｅ", "ｆ", "ｇ", "ｈ", "１", "２", "３", "４", "５", "６", "７", "８",
   "а", "с", "е", "н", "в", "А", "Е", "Н", "В", "С",
   "–", "—", "−",
+  "/", "·", "*", "，", "(", ")", "|", "~", "^", ":", ";", ",", "€",
+  "đ", "ħ", "ø", "ł", "♘", "♛", "٣",
 ];
 
-/** Independent oracle: canonicalise char by char, drop invisibles, then scan for [a-h][1-8] not followed by a digit. */
-function oracleHasSquare(s: string): boolean {
+const OR_PUNCT = new Set([..."/·*，()|~^:;,.€=<>_+#!?-–—−"]);
+
+/**
+ * Independent oracle (plain char scan, no regex, no shared code with validate.ts). It flags a string when it
+ * has a square (file+rank, joined across spaces and punctuation when the file letter is standalone or follows a
+ * standalone piece letter), a letter outside plain a-z after folding, a non-ASCII digit, or a figurine glyph.
+ */
+function oracleFlags(s: string): boolean {
   const zeroWidth = new Set([0x200b, 0x200c, 0x200d, 0x2060, 0xfeff, 0x00ad]);
   const cyr: Record<string, string> = { "а": "a", "с": "c", "е": "e", "н": "h", "в": "b" };
   const chars: string[] = [];
   for (const ch of s) {
     const cp = ch.codePointAt(0)!;
     if (zeroWidth.has(cp)) continue;
+    if (cp >= 0x2654 && cp <= 0x265f) return true; // figurine
+    if (cp === 0x0663) return true; // non-ASCII digit
+    if ([0x0111, 0x0127, 0x00f8, 0x0142].includes(cp)) return true; // stroked letters (stay non-ASCII after folding)
     let c = cp >= 0xff01 && cp <= 0xff5e ? String.fromCodePoint(cp - 0xfee0) : ch;
     c = c.toLowerCase();
     chars.push(cyr[c] ?? c);
   }
-  const isFile = (c: string | undefined): boolean => c !== undefined && c >= "a" && c <= "h" && c.length === 1;
-  const isRank = (c: string | undefined): boolean => c !== undefined && c >= "1" && c <= "8" && c.length === 1;
-  const isDigit = (c: string | undefined): boolean => c !== undefined && c >= "0" && c <= "9" && c.length === 1;
+  const isFile = (c: string | undefined): boolean => c !== undefined && c.length === 1 && c >= "a" && c <= "h";
+  const isRank = (c: string | undefined): boolean => c !== undefined && c.length === 1 && c >= "1" && c <= "8";
+  const isDigit = (c: string | undefined): boolean => c !== undefined && c.length === 1 && c >= "0" && c <= "9";
   const isLetter = (c: string | undefined): boolean => c !== undefined && c.length === 1 && c >= "a" && c <= "z";
+  const isPieceLetter = (c: string | undefined): boolean => c !== undefined && c.length === 1 && "kqrbn".includes(c);
   for (let i = 0; i < chars.length; i++) {
     if (!isFile(chars[i])) continue;
-    // adjacent file + rank
     if (isRank(chars[i + 1]) && !isDigit(chars[i + 2])) return true;
-    // single file letter (not part of a word), then whitespace/dashes, then a rank
-    if (!isLetter(chars[i - 1])) {
+    const standalone = !isLetter(chars[i - 1]) || (isPieceLetter(chars[i - 1]) && !isLetter(chars[i - 2]));
+    if (standalone) {
       let j = i + 1;
-      while (chars[j] === " " || chars[j] === "-" || chars[j] === "–" || chars[j] === "—" || chars[j] === "−") j++;
+      while (chars[j] !== undefined && (chars[j] === " " || OR_PUNCT.has(chars[j]!))) j++;
       if (j > i + 1 && isRank(chars[j]) && !isDigit(chars[j + 1])) return true;
     }
   }
   return false;
 }
 
-describe("fuzz: no string with a valid square gets through", () => {
-  it("600 random strings from a move-like alphabet, plus targeted mutations", () => {
-    const rnd = mulberry32(20260920);
+describe("fuzz: nothing the oracle flags gets through", () => {
+  it("1000 random strings from a move-like alphabet, plus disguised squares", () => {
+    const rnd = mulberry32(20260921);
     let positives = 0;
     let negatives = 0;
-    for (let n = 0; n < 600; n++) {
+    for (let n = 0; n < 1000; n++) {
       const len = 1 + Math.floor(rnd() * 14);
       let s = "";
       for (let i = 0; i < len; i++) s += ALPHABET[Math.floor(rnd() * ALPHABET.length)];
-      if (oracleHasSquare(s)) {
+      if (oracleFlags(s)) {
         positives++;
         expect(containsMoveLikeContent(s), JSON.stringify(s)).toBe(true);
       } else negatives++;
     }
-    // targeted: a real square with a random disguise, embedded in random filler
     const files = ["a", "b", "c", "d", "e", "f", "g", "h"];
-    const disguises = [
-      (f: string, r: string) => `${f}${r}`,
-      (f: string, r: string) => `${f}​${r}`,
-      (f: string, r: string) => `${f} ${r}`,
-      (f: string, r: string) => `${f}­${r}`,
-      (f: string, r: string) => String.fromCodePoint(f.codePointAt(0)! + 0xfee0) + String.fromCodePoint(r.codePointAt(0)! + 0xfee0),
-      (f: string, r: string) => `${f.toUpperCase()}${r}`,
-      (f: string, r: string) => `play${f}${r}`,
-      (f: string, r: string) => `${f}-${r}`,
-    ];
-    for (let n = 0; n < 200; n++) {
+    const seps = ["", "​", " ", "­", "-", "/", "·", "*", "，", "(", " ( ", "|", "−"];
+    for (let n = 0; n < 300; n++) {
       const f = files[Math.floor(rnd() * 8)]!;
       const r = String(1 + Math.floor(rnd() * 8));
-      const d = disguises[Math.floor(rnd() * disguises.length)]!;
-      const pre = "abcdefghijklmnopqrstuvwxyz ".repeat(1).slice(0, Math.floor(rnd() * 5));
-      const s = `${pre} ${d(f, r)} tail`;
-      expect(oracleHasSquare(s), `oracle self-check ${JSON.stringify(s)}`).toBe(true);
+      const sep = seps[Math.floor(rnd() * seps.length)]!;
+      const wide = rnd() < 0.2;
+      const ff = wide ? String.fromCodePoint(f.codePointAt(0)! + 0xfee0) : rnd() < 0.3 ? f.toUpperCase() : f;
+      const s = `xx yy ${ff}${sep}${r} tail`;
+      expect(oracleFlags(s), `oracle self-check ${JSON.stringify(s)}`).toBe(true);
       expect(containsMoveLikeContent(s), JSON.stringify(s)).toBe(true);
       positives++;
     }
-    expect(positives).toBeGreaterThan(100);
-    expect(negatives).toBeGreaterThan(50); // the fuzz is not all-positive
+    expect(positives).toBeGreaterThan(200);
+    expect(negatives).toBeGreaterThan(50);
   });
 });
 
@@ -241,8 +304,50 @@ describe("validateAdvice: moves only through mentionedMoves", () => {
 
 describe("prompt", () => {
   it("forbids moves in text and points to mentionedMoves", () => {
-    expect(COACH_SYSTEM_PROMPT).toMatch(/Never write chess moves in any text field/);
+    expect(COACH_SYSTEM_PROMPT).toMatch(/Never write chess moves, and never name chess pieces, in any text field/);
     expect(COACH_SYSTEM_PROMPT).toMatch(/"mentionedMoves"/);
     expect(COACH_SYSTEM_PROMPT).toMatch(/castling/);
+  });
+});
+
+describe("referencedMovesByFinding (what the UI stores and shows)", () => {
+  const withMoves = (moves: string[]): CoachAdvice => {
+    const a = clone(GOOD_ADVICE);
+    a.findings[0]!.mentionedMoves = moves;
+    return a;
+  };
+  const first = (a: CoachAdvice) => referencedMovesByFinding(a, ctx)["f-time"];
+
+  it("stores the normalised form, never the raw model string", () => {
+    const glyphs = withMoves(["Nf3!!!!!!!!!!!!"]);
+    expect(validateAdvice(glyphs, ctx)).toEqual({ ok: true }); // passes validation...
+    expect(first(glyphs)).toEqual(["Nf3"]); // ...but only the short normalised move is kept
+  });
+  it("trims whitespace and folds full-width variants", () => {
+    expect(first(withMoves(["  Nf3  ", "\tg1f3\n", "Ｎｆ３", "Nf3 ! ?"]))).toEqual(["Nf3", "g1f3"]);
+  });
+  it("deduplicates", () => {
+    expect(first(withMoves(["Nf3", "Nf3+", "Nf3!", "d1d2", "d1d2"]))).toEqual(["Nf3", "d1d2"]);
+  });
+  it("drops non-members and caps an over-long list", () => {
+    expect(first(withMoves(["Nf3", "Qxf7", "Ra8"]))).toEqual(["Nf3"]);
+    const many = Array.from({ length: 500 }, () => "Nf3").concat(["d1d2"]);
+    expect(first(withMoves(many))).toEqual(["Nf3", "d1d2"]);
+    expect(MAX_REFERENCED_MOVES).toBeLessThanOrEqual(8);
+    expect(first(withMoves([]))).toBeUndefined();
+  });
+  it("every stored move is short enough for the result schema", () => {
+    const out = first(withMoves(["Nf3!!!!!!!!!!!!!!!!!!!!", "d1d2?!?!?!?!?!?!?!?!?!"]))!;
+    for (const m of out) expect(m.length).toBeLessThanOrEqual(12);
+  });
+});
+
+describe("emotion claims are also checked on normalised text (evasion)", () => {
+  it("rejects a zero-width or look-alike split emotion claim", () => {
+    for (const t of ["You were fr​ustrated, consistent with a streak.", "You were ｎｅｒｖｏｕｓ, consistent with a streak.", "You were tіlted, consistent with a streak."]) {
+      const a = clone(GOOD_ADVICE);
+      a.findings[0]!.explanation = t;
+      expect(validateAdvice(a, ctx).ok, t).toBe(false);
+    }
   });
 });
