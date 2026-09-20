@@ -1,10 +1,14 @@
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { Chess } from "chess.js";
 import { EngineNotFoundError, type EngineAnalyzer } from "../src/core/engine";
 import { detectHabits } from "../src/core/habits";
-import { HttpError } from "../src/core/import";
+import { HttpError, splitPgn } from "../src/core/import";
 import type { PositionEval } from "../src/core/domain";
 import { inferHero, readConfig, runPipeline, toUserMessage, type PipelineDeps } from "../src/app/lib/pipeline";
+import { MAX_PGN_FILE_BYTES, readPgnFile } from "../src/app/lib/pgn-file";
 import { createRealService } from "../src/app/lib/real-service";
 import { ResultSchema, ServiceBusyError, type JobState, type Progress } from "../src/app/lib/types";
 import { readFixture } from "./fixtures/load";
@@ -118,11 +122,21 @@ describe("runPipeline with a fake engine and fixture PGNs", () => {
 
   it("analyzes pasted PGN, inferring the user as the most frequent player", async () => {
     const pgn = readFixture("lichess-export.pgn");
-    expect(inferHero(pgn)).toBe("hero");
+    expect(inferHero(pgn)?.toLowerCase()).toBe("hero");
     const engine = new FakeEngine();
     const out = await runPipeline({ source: "pgn", pgn }, deps(engine, fakeFetch("")));
     expect(out.result.gamesAnalyzed).toBeGreaterThan(0);
     expect(ResultSchema.safeParse(out.result).success).toBe(true);
+    expect(out.result.assumedPlayer?.toLowerCase()).toBe("hero");
+    // Named-user imports never carry an assumption.
+    const named = await runPipeline({ source: "lichess", username: "abc" }, deps(new FakeEngine(), fakeFetch("")));
+    expect(named.result.assumedPlayer).toBeUndefined();
+  });
+
+  it("splitPgn stays linear on long blank-line runs", () => {
+    const t = Date.now();
+    expect(splitPgn('[Event "x"]\n' + "\n".repeat(300_000) + '1. e4 *\n\n[Event "y"]\n\n1. d4 *')).toHaveLength(2);
+    expect(Date.now() - t).toBeLessThan(1000);
   });
 
   it("caps games at maxGames", async () => {
@@ -196,5 +210,23 @@ describe("real service", () => {
     const { id } = await svc.start({ source: "lichess", username: "ghost1" });
     const s = await settle(() => svc.get(id));
     expect(s).toEqual({ state: "error", message: "Username not found on Lichess." });
+  });
+});
+
+describe("readPgnFile", () => {
+  it("accepts a small regular file and rejects missing, directory and oversized paths", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cm-pgn-"));
+    try {
+      const ok = join(dir, "a.pgn");
+      writeFileSync(ok, "[Event \"x\"]\n\n1. e4 *\n");
+      expect(readPgnFile(ok)).toContain("e4");
+      expect(() => readPgnFile(join(dir, "missing.pgn"))).toThrow("Could not read the PGN file. Check the path and permissions.");
+      expect(() => readPgnFile(dir)).toThrow("not a regular file");
+      const big = join(dir, "big.pgn");
+      writeFileSync(big, Buffer.alloc(MAX_PGN_FILE_BYTES + 1, 97));
+      expect(() => readPgnFile(big)).toThrow("larger than");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

@@ -54,11 +54,21 @@ export function splitPgn(text: string): string[] {
   if (text.length > MAX_INPUT_CHARS) {
     throw new PgnLimitError(`PGN input is larger than ${MAX_INPUT_CHARS} characters.`);
   }
-  return text
-    .replace(/\r\n?/g, "\n")
-    .split(/\n\s*\n(?=\[Event\s)/)
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0);
+  // Linear scan: a game starts at an "[Event " line that follows a blank line.
+  // (A single regex with \s* around the newlines is quadratic on long blank runs.)
+  const games: string[] = [];
+  let current: string[] = [];
+  let prevBlank = false;
+  for (const line of text.replace(/\r\n?/g, "\n").split("\n")) {
+    if (prevBlank && /^\[Event\s/.test(line) && current.length > 0) {
+      games.push(current.join("\n"));
+      current = [];
+    }
+    current.push(line);
+    prevBlank = line.trim() === "";
+  }
+  games.push(current.join("\n"));
+  return games.map((s) => s.trim()).filter((s) => s.length > 0);
 }
 
 /** "180+2" -> 180s + 2s; "600" -> 600s; "-" and daily "1/86400" -> undefined. */

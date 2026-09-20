@@ -110,6 +110,13 @@ describe("components", () => {
     if (!f || f.status !== "insufficient_data") throw new Error("fixture");
     expect(renderToStaticMarkup(<FindingCard finding={f} />)).toContain(f.reason);
   });
+  it("FindingsList shows the assumed player for pasted PGN and escapes it", () => {
+    const html = renderToStaticMarkup(<FindingsList result={{ ...result, assumedPlayer: "<b>Bob</b>" }} />);
+    expect(html).toContain("Analyzing games as player");
+    expect(html).toContain("&lt;b&gt;Bob&lt;/b&gt;");
+    expect(renderToStaticMarkup(<FindingsList result={result} />)).not.toContain("Analyzing games as player");
+  });
+
   it("FindingsList renders the empty state when nothing is detected", () => {
     const html = renderToStaticMarkup(<FindingsList result={{ ...result, findings: [] }} />);
     expect(html).toContain("No recurring patterns found");

@@ -9,6 +9,13 @@ export function FindingsList({ result }: { result: AnalysisResult }) {
   const insufficient = result.findings.filter((f) => f.status === "insufficient_data");
   return (
     <>
+      {result.assumedPlayer && (
+        <p className="lede">
+          Analyzing games as player <strong>{result.assumedPlayer}</strong> (guessed from your pasted PGN as the most
+          frequent name). If that is wrong, the results are not about you: paste games where you are the most frequent
+          player.
+        </p>
+      )}
       <p className="lede">
         Based on {result.gamesAnalyzed} games. These are hypotheses drawn from your move and clock data, not
         conclusions about you. Open the evidence to check them yourself.

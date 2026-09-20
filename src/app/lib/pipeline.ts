@@ -11,6 +11,7 @@ import { ResultSchema, type AnalysisResult, type ImportRequest, type Progress } 
 
 export const DEFAULT_DEPTH = 12;
 export const DEFAULT_MAX_GAMES = 50;
+const MAX_NAME_CHARS = 40;
 
 export interface PipelineConfig {
   /** Fixed search depth per position (env CHESSMIRROR_DEPTH, 1 to 30). */
@@ -101,11 +102,15 @@ export function toUserMessage(e: unknown, source: ImportRequest["source"]): stri
  */
 export function inferHero(pgn: string): string | undefined {
   const counts = new Map<string, number>();
+  const display = new Map<string, string>();
   for (const chunk of splitPgn(pgn)) {
     for (const tag of ["White", "Black"]) {
       const m = new RegExp(`^\\[${tag} "((?:[^"\\\\]|\\\\.)*)"\\]`, "m").exec(chunk);
       const name = m?.[1]?.replace(/\\(.)/g, "$1").trim();
-      if (name) counts.set(name.toLowerCase(), (counts.get(name.toLowerCase()) ?? 0) + 1);
+      if (!name) continue;
+      const key = name.toLowerCase();
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+      if (!display.has(key)) display.set(key, name.slice(0, MAX_NAME_CHARS));
     }
   }
   let best: string | undefined;
@@ -116,10 +121,13 @@ export function inferHero(pgn: string): string | undefined {
       bestN = n;
     }
   }
-  return best;
+  return best === undefined ? undefined : display.get(best);
 }
 
-async function importGames(request: ImportRequest, deps: PipelineDeps): Promise<Game[]> {
+async function importGames(
+  request: ImportRequest,
+  deps: PipelineDeps,
+): Promise<{ games: Game[]; assumedPlayer?: string }> {
   const { config } = deps;
   const http = {
     ...(deps.fetch ? { fetch: deps.fetch } : {}),
@@ -128,20 +136,23 @@ async function importGames(request: ImportRequest, deps: PipelineDeps): Promise<
   if (request.source === "pgn") {
     const hero = inferHero(request.pgn);
     if (!hero) throw new PipelineError("Could not find any games with player names in that PGN.");
-    return parsePgnText(request.pgn, { source: "pgn", username: hero, maxGames: config.maxGames }).games;
+    const games = parsePgnText(request.pgn, { source: "pgn", username: hero, maxGames: config.maxGames }).games;
+    return { games, assumedPlayer: hero };
   }
   if (request.source === "lichess") {
-    return new LichessSource(http).fetchGames({ username: request.username, max: config.maxGames });
+    return { games: await new LichessSource(http).fetchGames({ username: request.username, max: config.maxGames }) };
   }
   if (!config.chesscomUserAgent) {
     throw new PipelineError(
       "chess.com import needs CHESSCOM_USER_AGENT set (a descriptive name with a contact, see .env.example).",
     );
   }
-  return new ChessComSource({ ...http, userAgent: config.chesscomUserAgent }).fetchGames({
-    username: request.username,
-    max: config.maxGames,
-  });
+  return {
+    games: await new ChessComSource({ ...http, userAgent: config.chesscomUserAgent }).fetchGames({
+      username: request.username,
+      max: config.maxGames,
+    }),
+  };
 }
 
 /** Coach text replaces the detector's own explanation when it names the finding. */
@@ -165,7 +176,8 @@ export async function runPipeline(request: ImportRequest, deps: PipelineDeps): P
     await engine.analyze(START_FEN, { depth: 1 });
 
     progress({ stage: "import", done: 0, total: 0 });
-    const games = (await importGames(request, deps)).filter((g) => g.moves.length > 0);
+    const imported = await importGames(request, deps);
+    const games = imported.games.filter((g) => g.moves.length > 0);
     await repo.saveGames(games);
     progress({ stage: "import", done: games.length, total: games.length });
 
@@ -207,7 +219,12 @@ export async function runPipeline(request: ImportRequest, deps: PipelineDeps): P
     await repo.savePlan(plan);
     progress({ stage: "plan", done: 1, total: 1 });
 
-    const result = ResultSchema.parse({ gamesAnalyzed: analyzed.length, findings, plan });
+    const result = ResultSchema.parse({
+      gamesAnalyzed: analyzed.length,
+      findings,
+      plan,
+      ...(imported.assumedPlayer ? { assumedPlayer: imported.assumedPlayer } : {}),
+    });
     return { result, analyzed, skipped, summary: coach.advice.summary, coachSource: coach.source };
   } finally {
     await engine.close().catch(() => undefined);

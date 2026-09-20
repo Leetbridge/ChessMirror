@@ -9,7 +9,7 @@
  * Env: STOCKFISH_PATH, CHESSMIRROR_DEPTH (default 12), CHESSMIRROR_MAX_GAMES (default 50),
  * CHESSCOM_USER_AGENT (chess.com only), ANTHROPIC_API_KEY (optional, otherwise template text).
  */
-import { readFileSync } from "node:fs";
+import { PgnFileError, readPgnFile } from "../src/app/lib/pgn-file";
 import { readConfig, runPipeline, toUserMessage } from "../src/app/lib/pipeline";
 import { ImportRequestSchema, type ImportRequest } from "../src/app/lib/types";
 
@@ -19,9 +19,16 @@ async function main(): Promise<number> {
     console.error("Usage: run-analysis.ts <lichess|chesscom|pgn> <username|file.pgn> [maxGames]");
     return 2;
   }
-  const parsed = ImportRequestSchema.safeParse(
-    source === "pgn" ? { source, pgn: readFileSync(target, "utf8") } : { source, username: target },
-  );
+  let pgn = "";
+  if (source === "pgn") {
+    try {
+      pgn = readPgnFile(target);
+    } catch (e) {
+      console.error(e instanceof PgnFileError ? e.message : "Could not read the PGN file.");
+      return 2;
+    }
+  }
+  const parsed = ImportRequestSchema.safeParse(source === "pgn" ? { source, pgn } : { source, username: target });
   if (!parsed.success) {
     console.error("Invalid input: check the username or PGN.");
     return 2;
@@ -49,6 +56,7 @@ async function main(): Promise<number> {
       JSON.stringify(
         {
           gamesAnalyzed: out.result.gamesAnalyzed,
+          ...(out.result.assumedPlayer ? { assumedPlayer: out.result.assumedPlayer } : {}),
           skipped: out.skipped,
           depth: config.depth,
           coachSource: out.coachSource,
