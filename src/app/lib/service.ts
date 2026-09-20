@@ -3,7 +3,8 @@
 // both (size and concurrency limits exist in the analyze route and the service, but
 // they are not a substitute).
 import { createMockService } from "./mock-service";
-import { createRealService } from "./real-service";
+import { createRealService, envDeps } from "./real-service";
+import { createFileResultStore, databasePath } from "./storage";
 import type { AnalysisService } from "./types";
 
 // Real pipeline by default (import -> engine -> classify -> habits -> plan -> coach).
@@ -11,6 +12,6 @@ import type { AnalysisService } from "./types";
 const globalForService = globalThis as unknown as { __chessmirrorService?: AnalysisService };
 
 export function getService(): AnalysisService {
-  globalForService.__chessmirrorService ??= process.env["CHESSMIRROR_MOCK"] === "1" ? createMockService() : createRealService();
+  globalForService.__chessmirrorService ??= process.env["CHESSMIRROR_MOCK"] === "1" ? createMockService() : createRealService(envDeps, Date.now, createFileResultStore(databasePath(process.env)) ?? null);
   return globalForService.__chessmirrorService;
 }
