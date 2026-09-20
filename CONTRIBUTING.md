@@ -1,6 +1,6 @@
 # Contributing to ChessMirror
 
-Thanks for helping. Please read [ARCHITECTURE.md](ARCHITECTURE.md) and [CLAUDE.md](CLAUDE.md) first: they hold the rules that apply to every contributor, human or AI.
+Thanks for helping. Please read [ARCHITECTURE.md](ARCHITECTURE.md) first, then the short rules below.
 
 ## Setup
 
@@ -30,6 +30,7 @@ Stockfish is GPL and must stay an external process. Never add its binary or sour
 - Respect rate limits (Lichess: one request at a time, back off on 429; chess.com: descriptive User-Agent).
 - No secrets in git. Add new env vars to `.env.example`.
 - Do not invent APIs or library options. If unsure, say so in the PR.
+- Stockfish stays an external process (`STOCKFISH_PATH`); never bundle or vendor it (GPL, see ADR 0002).
 
 ## Finding work
 

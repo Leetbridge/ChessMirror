@@ -28,4 +28,4 @@ Plans, not promises. Only v0 is under active work. Scope may change; stack chang
 - Still hypotheses only, never emotion detection.
 
 ## Known risks
-See "Known risks" in [docs/TASKS.md](docs/TASKS.md).
+See [docs/KNOWN-LIMITATIONS.md](docs/KNOWN-LIMITATIONS.md).

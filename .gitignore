@@ -147,4 +147,7 @@ next-env.d.ts
 /data/
 
 # Local agent worktrees
-.claude/worktrees/
+.claude/
+CLAUDE.md
+MENTOR.md
+internal/

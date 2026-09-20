@@ -74,4 +74,4 @@ Each returns evidence (game and ply references), severity, confidence, one plain
 
 ## Open questions
 
-See `docs/adr/` and the "Known risks" list in `docs/TASKS.md`.
+See `docs/adr/` and [docs/KNOWN-LIMITATIONS.md](docs/KNOWN-LIMITATIONS.md).

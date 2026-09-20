@@ -3,7 +3,7 @@
  *
  * Every number here is a heuristic starting point, NOT a validated value.
  * They have not been calibrated on real player data yet; tune them against
- * golden PGN sets (see docs/TASKS.md, QA) before trusting severities.
+ * golden PGN sets (see docs/KNOWN-LIMITATIONS.md) before trusting severities.
  */
 
 /** Minimum games any detector needs before it will report anything. */
