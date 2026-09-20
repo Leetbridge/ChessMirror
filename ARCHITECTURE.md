@@ -49,6 +49,8 @@ Rules, enforced by ESLint import boundaries:
 - `coach` never calls `engine`. Engine data reaches it as input.
 - Only `src/app` wires modules together.
 
+Finished analysis results are also written as JSON files next to the database (`results/<job-uuid>.json`, mode 0600, pruned by count and age). Anyone who holds the unguessable job UUID can read that result through the API. chessmirror is a single-user local tool with no authentication; do not expose it publicly without adding some.
+
 Reserved slots, no code yet: `courses` (v1), `repertoire` (v2), `endgames` (v3), `voice` and `mirror` (v4).
 
 ## Habit detectors (v0)

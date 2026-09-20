@@ -38,10 +38,24 @@ export const ProgressSchema = z.object({
 });
 export type Progress = z.infer<typeof ProgressSchema>;
 
+/** A real Lichess puzzle (CC0) attached to a chess drill. moves[0] is the opponent's move, the rest is the solution. */
+export const PuzzleRefSchema = z.object({
+  id: z.string().regex(/^[A-Za-z0-9]{1,16}$/),
+  fen: z.string().min(1),
+  moves: z.array(z.string().min(4).max(5)).min(2),
+  rating: z.number().int().positive(),
+  themes: z.array(z.string().min(1)),
+});
+export type PuzzleRef = z.infer<typeof PuzzleRefSchema>;
+
 export const ResultSchema = z.object({
   gamesAnalyzed: z.number().int().nonnegative(),
   findings: z.array(FindingSchema),
   plan: PlanSchema,
+  /** Puzzles per chess drill id (additive; the domain Drill type is unchanged). */
+  drillPuzzles: z.record(z.string(), z.array(PuzzleRefSchema)).optional(),
+  /** False when the puzzle database is missing (the plan view then suggests `npm run setup:puzzles`). */
+  puzzlesAvailable: z.boolean().optional(),
   /** Pasted PGN only: the player the analysis assumed to be the user (guessed from the games). */
   assumedPlayer: z.string().min(1).max(40).optional(),
 });
