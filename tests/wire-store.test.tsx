@@ -1,16 +1,18 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { buildPuzzleIndex } from "../src/core/puzzles";
 import { createSqlitePuzzleStore, createSqliteRepository } from "../src/core/store";
+import type { PuzzleStore } from "../src/core/store";
 import { PlanContent } from "../src/app/components/PlanView";
 import { readConfig, runPipeline, type PipelineDeps } from "../src/app/lib/pipeline";
 import { attachPuzzles, estimateRating } from "../src/app/lib/puzzles";
 import { createRealService, envDeps } from "../src/app/lib/real-service";
 import {
   createFileResultStore,
+  MAX_RESULT_FILES,
   openPuzzleStore,
   openRepository,
 } from "../src/app/lib/storage";
@@ -187,5 +189,99 @@ describe("plan view", () => {
     expect(html).toContain("rating 2235");
     expect(html).toContain("long");
     expect(html).not.toContain("setup:puzzles");
+  });
+});
+
+describe("result files: permissions and retention", () => {
+  const result = { gamesAnalyzed: 0, findings: [], plan: { id: "p", createdAt: "2026-01-01T00:00:00.000Z", findingIds: [], chessDrills: [], softSkillDrills: [], puzzleThemes: [] } };
+  const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+
+  it("writes files 0600 in a 0700 directory and leaves no tmp file", () => {
+    const rs = createFileResultStore(join(dir, "db.sqlite"))!;
+    rs.save(uuid(1), result);
+    const resultsDir = join(dir, "results");
+    expect(statSync(resultsDir).mode & 0o777).toBe(0o700);
+    expect(statSync(join(resultsDir, `${uuid(1)}.json`)).mode & 0o777).toBe(0o600);
+    expect(readdirSync(resultsDir).filter((f) => f.endsWith(".tmp"))).toEqual([]);
+    expect(rs.load(uuid(1))).toEqual(result);
+  });
+
+  it("keeps at most maxFiles (newest) and deletes files older than maxAge", () => {
+    expect(MAX_RESULT_FILES).toBe(200);
+    const rs = createFileResultStore(join(dir, "db.sqlite"), () => {}, { maxFiles: 3, maxAgeMs: 10 * 86_400_000 })!;
+    const resultsDir = join(dir, "results");
+    const t0 = Date.now();
+    for (let i = 1; i <= 5; i++) {
+      rs.save(uuid(i), result);
+      const when = new Date(t0 - (6 - i) * 1000); // i=5 newest
+      utimesSync(join(resultsDir, `${uuid(i)}.json`), when, when);
+    }
+    rs.save(uuid(6), result); // triggers pruning: keeps the 3 newest of 6
+    expect(readdirSync(resultsDir).sort()).toEqual([uuid(4), uuid(5), uuid(6)].map((u) => `${u}.json`));
+    // Age rule
+    const old = new Date(t0 - 40 * 86_400_000);
+    utimesSync(join(resultsDir, `${uuid(4)}.json`), old, old);
+    rs.save(uuid(7), result);
+    expect(existsSync(join(resultsDir, `${uuid(4)}.json`))).toBe(false);
+    expect(existsSync(join(resultsDir, `${uuid(7)}.json`))).toBe(true);
+  });
+
+  it("removes the tmp file when the rename fails and does not throw", () => {
+    const logs: string[] = [];
+    const rs = createFileResultStore(join(dir, "db.sqlite"), (m) => logs.push(m))!;
+    rs.save(uuid(1), result);
+    // Make the destination a directory so renameSync fails.
+    const resultsDir = join(dir, "results");
+    rmSync(join(resultsDir, `${uuid(2)}.json`), { force: true });
+    mkdirSync(join(resultsDir, `${uuid(2)}.json`));
+    rs.save(uuid(2), result);
+    expect(logs).toHaveLength(1);
+    expect(existsSync(join(resultsDir, `${uuid(2)}.json.tmp`))).toBe(false);
+  });
+});
+
+describe("puzzle robustness", () => {
+  const run = (puzzleStore: PuzzleStore) =>
+    runPipeline(request, {
+      config: readConfig({}),
+      env: {},
+      fetch: fakeFetch(PGN()).fetch,
+      createEngine: () => new FakeEngine(),
+      puzzleStore,
+    });
+  const store = (find: PuzzleStore["find"]): PuzzleStore => ({
+    insertMany() {},
+    find,
+    listThemes: () => [],
+    count: () => 0,
+    close() {},
+  });
+
+  it("a corrupt puzzle database file is skipped with a log line", () => {
+    const bad = join(dir, "bad.db");
+    writeFileSync(bad, "this is not a sqlite database at all, just text".repeat(50));
+    const logs: string[] = [];
+    expect(openPuzzleStore(bad, (m) => logs.push(m))).toBeUndefined();
+    expect(logs).toHaveLength(1);
+  });
+
+  it("a store that throws yields puzzlesAvailable:false, not a failed analysis", async () => {
+    const out = await run(
+      store(() => {
+        throw new Error("SQLITE_CORRUPT");
+      }),
+    );
+    expect(out.result.gamesAnalyzed).toBe(6);
+    expect(out.result.puzzlesAvailable).toBe(false);
+    expect(out.result.drillPuzzles).toBeUndefined();
+    expect(ResultSchema.safeParse(out.result).success).toBe(true);
+  });
+
+  it("rows that fail the schema are dropped", async () => {
+    const good = { id: "00sJb", fen: "x", moves: ["a1a2", "a2a3"], rating: 1500, popularity: 1, nbPlays: 1, themes: ["advantage"] };
+    const out = await run(store(() => [good, { ...good, id: "bad id!" }, { ...good, id: "ok2", moves: ["a1a2"] }]));
+    const all = Object.values(out.result.drillPuzzles ?? {}).flat();
+    expect(all.length).toBeGreaterThan(0);
+    expect(all.every((p) => p.id === "00sJb")).toBe(true);
   });
 });

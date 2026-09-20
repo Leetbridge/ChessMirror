@@ -8,7 +8,7 @@ import { buildPlan } from "../../core/plan";
 import type { PuzzleStore, Repository } from "../../core/store";
 import { createMemoryRepository } from "./memory-repository";
 import { attachPuzzles, estimateRating } from "./puzzles";
-import { ResultSchema, type AnalysisResult, type ImportRequest, type Progress } from "./types";
+import { ResultSchema, type PuzzleRef, type AnalysisResult, type ImportRequest, type Progress } from "./types";
 
 export const DEFAULT_DEPTH = 12;
 export const DEFAULT_MAX_GAMES = 50;
@@ -224,12 +224,22 @@ export async function runPipeline(request: ImportRequest, deps: PipelineDeps): P
     await repo.savePlan(plan);
     progress({ stage: "plan", done: 1, total: 1 });
 
+    // A broken puzzle DB must never fail the analysis: report puzzles as unavailable instead.
+    let puzzles: Record<string, PuzzleRef[]> | undefined;
+    if (deps.puzzleStore) {
+      try {
+        puzzles = attachPuzzles(plan, deps.puzzleStore, estimateRating(analyzed));
+      } catch {
+        puzzles = undefined;
+      }
+    }
+
     const result = ResultSchema.parse({
       gamesAnalyzed: analyzed.length,
       findings,
       plan,
-      puzzlesAvailable: deps.puzzleStore !== undefined,
-      ...(deps.puzzleStore ? { drillPuzzles: attachPuzzles(plan, deps.puzzleStore, estimateRating(analyzed)) } : {}),
+      puzzlesAvailable: puzzles !== undefined,
+      ...(puzzles ? { drillPuzzles: puzzles } : {}),
       ...(imported.assumedPlayer ? { assumedPlayer: imported.assumedPlayer } : {}),
     });
     return { result, analyzed, skipped, summary: coach.advice.summary, coachSource: coach.source };

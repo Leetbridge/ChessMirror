@@ -1,7 +1,7 @@
 import type { AnalyzedGame, Plan } from "../../core/domain";
 import { getPuzzlesByTheme } from "../../core/puzzles";
 import type { PuzzleStore } from "../../core/store";
-import type { PuzzleRef } from "./types";
+import { PuzzleRefSchema, type PuzzleRef } from "./types";
 
 export const PUZZLES_PER_DRILL = 10;
 export const RATING_WINDOW = 300;
@@ -32,9 +32,12 @@ export function attachPuzzles(plan: Plan, store: PuzzleStore, rating: number | u
             limit: PUZZLES_PER_DRILL,
           });
     const found = ranged.length > 0 ? ranged : getPuzzlesByTheme(store, themes, { limit: PUZZLES_PER_DRILL });
-    if (found.length > 0) {
-      out[drill.id] = found.map((p) => ({ id: p.id, fen: p.fen, moves: p.moves, rating: p.rating, themes: p.themes }));
-    }
+    // Rows that fail the schema are dropped, never shown.
+    const valid = found.flatMap((p) => {
+      const r = PuzzleRefSchema.safeParse({ id: p.id, fen: p.fen, moves: p.moves, rating: p.rating, themes: p.themes });
+      return r.success ? [r.data] : [];
+    });
+    if (valid.length > 0) out[drill.id] = valid;
   }
   return out;
 }

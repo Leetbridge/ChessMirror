@@ -42,6 +42,7 @@ async function main(): Promise<number> {
     const n = Number(max);
     if (!Number.isInteger(n) || n < 1 || n > 200) {
       console.error("maxGames must be an integer from 1 to 200.");
+      await base.release?.();
       return 2;
     }
     config.maxGames = n;

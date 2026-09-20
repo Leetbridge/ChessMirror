@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { CoachEnv } from "../../core/coach";
 import { createSqlitePuzzleStore, createSqliteRepository, type PuzzleStore, type Repository } from "../../core/store";
@@ -49,20 +49,61 @@ export interface ResultStore {
   load(id: string): AnalysisResult | undefined;
 }
 
+/** Retention for results/*.json, checked on every save. */
+export const MAX_RESULT_FILES = 200;
+export const MAX_RESULT_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+
 const ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
-export function createFileResultStore(dbPath: string, log: Log = defaultLog): ResultStore | undefined {
+/** Delete result files older than maxAgeMs, then the oldest ones beyond maxFiles. Best effort. */
+export function pruneResults(dir: string, now: number, maxFiles = MAX_RESULT_FILES, maxAgeMs = MAX_RESULT_AGE_MS): void {
+  try {
+    const files = readdirSync(dir)
+      .filter((f) => f.endsWith(".json"))
+      .flatMap((f) => {
+        try {
+          return [{ path: join(dir, f), mtime: statSync(join(dir, f)).mtimeMs }];
+        } catch {
+          return [];
+        }
+      })
+      .sort((a, b) => b.mtime - a.mtime); // newest first
+    files.forEach((f, i) => {
+      if (i >= maxFiles || now - f.mtime > maxAgeMs) {
+        try {
+          unlinkSync(f.path);
+        } catch {
+          /* already gone */
+        }
+      }
+    });
+  } catch {
+    /* directory unreadable: nothing to prune */
+  }
+}
+
+export function createFileResultStore(
+  dbPath: string,
+  log: Log = defaultLog,
+  limits: { maxFiles?: number; maxAgeMs?: number; now?: () => number } = {},
+): ResultStore | undefined {
   if (dbPath === ":memory:") return undefined;
   const dir = join(dirname(dbPath), "results");
   return {
     save(id, result) {
       if (!ID_RE.test(id)) return;
+      const tmp = join(dir, `${id}.json.tmp`);
       try {
-        mkdirSync(dir, { recursive: true });
-        const tmp = join(dir, `${id}.json.tmp`);
-        writeFileSync(tmp, JSON.stringify(result));
+        mkdirSync(dir, { recursive: true, mode: 0o700 });
+        writeFileSync(tmp, JSON.stringify(result), { mode: 0o600 });
         renameSync(tmp, join(dir, `${id}.json`));
+        pruneResults(dir, (limits.now ?? Date.now)(), limits.maxFiles, limits.maxAgeMs);
       } catch (e) {
+        try {
+          unlinkSync(tmp);
+        } catch {
+          /* no tmp file to remove */
+        }
         log(`Could not persist result ${id}: ${e instanceof Error ? e.message : "unknown error"}`);
       }
     },
