@@ -37,5 +37,6 @@ export const PUZZLE_MIGRATIONS: readonly string[] = [
      theme TEXT NOT NULL,
      PRIMARY KEY (theme, puzzle_id)
    ) WITHOUT ROWID;
+   CREATE INDEX puzzle_themes_puzzle ON puzzle_themes (puzzle_id);
    CREATE INDEX puzzles_rating ON puzzles (rating);`,
 ];

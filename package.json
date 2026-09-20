@@ -14,7 +14,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
-    "setup:puzzles": "node scripts/setup-puzzles.mjs",
+    "setup:puzzles": "tsx scripts/setup-puzzles.mjs",
     "analyze": "tsx --env-file-if-exists=.env scripts/run-analysis.ts"
   },
   "dependencies": {
