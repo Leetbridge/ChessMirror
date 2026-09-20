@@ -58,7 +58,7 @@ export const ResultSchema = z.object({
    * Moves the LLM referenced per finding id (validated against engine data, LLM source only). Text carries no moves,
    * so the UI shows these separately. Absent for template advice, whose text already names the engine moves.
    */
-  referencedMoves: z.record(z.string(), z.array(z.string().min(1).max(12))).optional(),
+  referencedMoves: z.record(z.string(), z.array(z.string().min(1).max(12)).max(8)).optional(),
   /** False when the puzzle database is missing (the plan view then suggests `npm run setup:puzzles`). */
   puzzlesAvailable: z.boolean().optional(),
   /** Pasted PGN only: the player the analysis assumed to be the user (guessed from the games). */

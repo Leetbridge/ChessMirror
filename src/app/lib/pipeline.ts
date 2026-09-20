@@ -1,4 +1,4 @@
-import { buildCoachContext, explainFindings, type CoachEnv, type LlmProvider } from "../../core/coach";
+import { buildCoachContext, explainFindings, referencedMovesByFinding, type CoachEnv, type LlmProvider } from "../../core/coach";
 import { ClassifyError, classifyGame, getPositions } from "../../core/classify";
 import { FindingSchema, type AnalyzedGame, type Finding, type Game } from "../../core/domain";
 import { EngineError, EngineNotFoundError, UciEngine, type EngineAnalyzer } from "../../core/engine";
@@ -211,7 +211,8 @@ export async function runPipeline(request: ImportRequest, deps: PipelineDeps): P
     progress({ stage: "habits", done: 1, total: 1 });
 
     progress({ stage: "plan", done: 0, total: 1 });
-    const coach = await explainFindings(buildCoachContext(detected, analyzed), {
+    const coachCtx = buildCoachContext(detected, analyzed);
+    const coach = await explainFindings(coachCtx, {
       ...(deps.provider ? { provider: deps.provider } : {}),
       env: deps.env ?? {},
     });
@@ -219,14 +220,12 @@ export async function runPipeline(request: ImportRequest, deps: PipelineDeps): P
       detected,
       new Map(coach.advice.findings.map((f) => [f.findingId, f.explanation])),
     );
-    const referencedMoves =
+    // Only normalised engine moves are stored. A schema problem here must never fail the analysis: drop the display.
+    const referencedParsed =
       coach.source === "llm"
-        ? Object.fromEntries(
-            coach.advice.findings
-              .filter((f) => f.mentionedMoves.length > 0)
-              .map((f) => [f.findingId, [...new Set(f.mentionedMoves)]]),
-          )
+        ? ResultSchema.shape.referencedMoves.safeParse(referencedMovesByFinding(coach.advice, coachCtx))
         : undefined;
+    const referencedMoves = referencedParsed?.success ? referencedParsed.data : undefined;
     const plan = buildPlan(findings, { now: now().toISOString() });
     await repo.saveFindings(findings);
     await repo.savePlan(plan);

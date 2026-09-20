@@ -24,14 +24,14 @@ export function extractMoveTokens(text: string): string[] {
 //
 // The LLM may name moves only through `mentionedMoves`, which is matched exactly against engine data.
 // Everything else is scanned by `moveLikeReasons` on NORMALISED text. This is deliberately over-inclusive:
-// a false positive (for example "B2B", or "a 3 game streak") only makes us fall back to the template,
+// a false positive (for example "B2B", "a 3 game streak", or any mention of a queen) only makes us fall back to the template,
 // which is safe. A false negative is the failure we must avoid.
 //
-// RESIDUAL RISK (cannot be closed by any regex): pure prose that names a move without any square or
-// notation ("take the queen with the knight on the left", "push the pawn in front of the king") can be
-// paraphrased in unboundedly many ways. The prompt forbids it and the rules below catch the common
-// phrasings, but it can never be excluded. Also unhandled: visual digit look-alikes (l or I for 1),
-// spelled-out squares in other languages. See docs/KNOWN-LIMITATIONS.md.
+// Piece words are rejected outright (no verb needed), which removes most prose paraphrases.
+// RESIDUAL RISK (cannot be closed by any regex): pure prose that names no piece and no square
+// ("retreat one step", "go back to the start") can be paraphrased in unboundedly many ways. The prompt forbids
+// it, but it can never be excluded. Also unhandled: visual digit look-alikes (l or I for 1). See
+// docs/KNOWN-LIMITATIONS.md.
 // ---------------------------------------------------------------------------------------------
 
 /** Chars that render as nothing but can split a token: format (Cf, includes ZWSP/soft hyphen/BOM/word joiner), controls, Hangul/Mongolian fillers, braille blank. */
@@ -60,50 +60,61 @@ export function normalizeForMoveScan(text: string): string {
     .normalize("NFKC");
 }
 
-const PIECES =
-  "knights?|bishops?|rooks?|queens?|kings?|pawns?|" + // English
+/**
+ * Piece words in any supported language. ANY occurrence in LLM free text is rejected (no verb needed): prose
+ * paraphrases such as "the bishop retreats" cannot be closed by verb lists, so the stronger rule is to keep pieces
+ * out of the text altogether. Plural and possessive forms are covered by the optional suffix. Lists come from
+ * general chess terminology and were not reviewed by native speakers.
+ */
+const PIECE_STEMS =
+  "knight|bishop|rook|queen|king|pawn|queenside|kingside|" + // English
   "springer|laeufer|laufer|turm|dame|koenig|konig|bauer|" + // German
-  "cavalier|fou|tour|roi|pion|" + // French
+  "cavalier|fou|tour|reine|roi|pion|" + // French
   "caballo|alfil|torre|dama|reina|rey|peon|" + // Spanish
-  "kon|slon|ladya|ferz|korol|peshka"; // Russian, transliterated
-const VERBS_AFTER_PIECE =
-  "to|takes?|captures?|on|at|goes|go|moves?|" +
-  "captured|taken|sacrificed|pushed|advanced|moved|played|traded|exchanged|hung|" +
-  "nach|auf|zieht|schlaegt|schlagt|nimmt|vers|sur|prend|va|joue|en|toma|captura|mueve|juega|na|beryot|hodit";
-const VERBS_BEFORE_PIECE =
-  "captur(?:e|es|ed|ing)|push(?:es|ed|ing)?|advanc(?:e|es|ed|ing)|sacrific(?:e|es|ed|ing)|sac(?:s|ked)?|take|takes|took|taken|" +
-  "trad(?:e|es|ed|ing)|exchang(?:e|es|ed|ing)|play(?:s|ed|ing)?|mov(?:e|es|ed|ing)|castl(?:e|es|ed|ing)|grab(?:s|bed)?|gives? up|gave up";
-const MOVE_VERBS =
-  "push(?:es|ed)?|advanc(?:e|es|ed)|mov(?:e|es|ed)|play(?:s|ed)?|captur(?:e|es|ed)|takes?|storm(?:s|ed)?|march(?:es|ed)?|goes|go|to";
+  "kon|slon|ladya|ladia|ferz|korol|koroleva|peshka"; // Russian, transliterated
+const PIECE_WORD = new RegExp(`\\b(?:${PIECE_STEMS})(?:s|es)?\\b`);
 
-const W = "(?:[^a-z]+[a-z]+)";
+/** Digit words, ordinals and the Spanish/French/German/Russian-transliterated digit words used to spell out a rank. */
+const NUM_WORDS =
+  "one|two|three|four|five|six|seven|eight|first|second|third|fourth|fifth|sixth|seventh|eighth|" +
+  "uno|dos|tres|cuatro|cinco|seis|siete|ocho|un|deux|trois|quatre|cinq|sept|huit|" +
+  "eins|zwei|drei|vier|fuenf|funf|sechs|sieben|acht|odin|dva|tri|chetyre|pyat|shest|sem|vosem";
+const SEP = "[\\s\\p{P}\\p{S}]+";
+const A_SPELLED = new RegExp(`(?<![a-z])a${SEP}(?:${NUM_WORDS})\\b`, "gu");
+const A_SPELLED_WITH_VERB = new RegExp(
+  `(?<![a-z])a${SEP}(?:${NUM_WORDS})\\b(?:[^a-z]+[a-z]+){0,4}?[^a-z]+(?:to|takes|on|at|goes|moves|nach|auf)\\b`,
+  "u",
+);
+
 const RULES: ReadonlyArray<readonly [string, RegExp]> = [
   ["square", /[a-h][1-8](?!\d)/],
   ["uci", /[a-h][1-8][a-h][1-8]/],
-  ["piece letter + file + spaced rank", /\b[kqrbn][a-h]\s+[1-8]/],
-  ["spelled-out square", /(?<![a-z])[b-h][\s-]*(?:one|two|three|four|five|six|seven|eight)\b/],
+  // b-h only here; the a-file needs context (see A_SPELLED). A separator is required so "done" or "gone" pass.
+  ["spelled-out square", new RegExp(`(?<![a-z])[b-h]${SEP}(?:${NUM_WORDS})\\b`, "u")],
+  ["roman-numeral square", new RegExp(`(?<![a-z])[b-h]${SEP}(?:iv|vi{0,3}|i{1,3}|ix)\\b`, "u")],
   ["castling notation", /\b[o0](?:\s*-\s*[o0]){1,2}\b/],
   ["castling word", /\b(?:castl\w*|rochade|roque|enroque|rokirovka)\b/],
+  ["promotion / en passant / named mate", /\b(?:under)?promot\w*|\ben passant\b|\bdiscovered check\b|\bmate in (?:\d+|one|two|three|four|five|six|seven|eight|nine|ten)\b/],
   ["numbered move sequence", /\d+\.\s*\.?\.?\s*[a-hnbrqko]/],
-  ["piece + movement verb", new RegExp(`\\b(?:${PIECES})\\b${W}{0,3}?[^a-z]+(?:${VERBS_AFTER_PIECE})\\b`)],
-  ["capture/push verb + piece", new RegExp(`\\b(?:${VERBS_BEFORE_PIECE})\\b${W}{0,5}?[^a-z]+(?:${PIECES})\\b`)],
+  ["figurine chess glyph", /[♔-♟\u{1FA00}-\u{1FA6F}]/u],
+  ["piece word", PIECE_WORD],
 ];
-const FILE_PAWN = /\b[a-h]-(?:file\s+)?pawns?\b|\b[a-h]\s+file\s+pawns?\b/;
-const MOVE_VERB_RE = new RegExp(`\\b(?:${MOVE_VERBS})\\b`);
 
 /** Which strict rules fire on this text. Empty means no chess-move content was found. */
 export function moveLikeReasons(text: string): string[] {
   const n = normalizeForMoveScan(text);
   const reasons: string[] = [];
-  // "f 3", "N f 3", "e-4" -> "f3", "n f3", "e4". Single a-h letters only, so "made 3 mistakes" is untouched.
-  const collapsed = n.replace(/(?<![a-z])([a-h])[\s._-]+(?=[1-8](?!\d))/g, "$1");
+  // Join a file letter (optionally after a piece letter) and a rank across whitespace and ANY punctuation or
+  // symbol: "f 3", "e-4", "e/4", "e(4)", "N e * 4" become "f3", "e4", ... The letter must not be part of a word,
+  // so "made 3 mistakes" is untouched.
+  const collapsed = n.replace(new RegExp(`(?<![a-z])([kqrbn]?[a-h])${SEP}(?=[1-8](?!\\d))`, "gu"), "$1");
   for (const [name, re] of RULES) if (re.test(collapsed)) reasons.push(name);
-  if (FILE_PAWN.test(n) && MOVE_VERB_RE.test(n)) reasons.push("file-pawn phrase + movement verb");
-  // After folding, any letter outside a-z and Latin-1/Latin Extended-A is an unverifiable look-alike (small caps,
-  // Cyrillic, Greek, ...). Non-ASCII decimal digits likewise. The coach writes English only, so this costs nothing.
-  if (/[^\P{L}a-zß-ſ]/u.test(n) || /(?![0-9])\p{Nd}/u.test(n)) {
-    reasons.push("non-Latin residue (possible look-alike)");
-  }
+  // "a" is also the English article ("a three-game streak"), so the a-file only counts with a movement word
+  // nearby, or when the text spells out more than one square.
+  if (A_SPELLED_WITH_VERB.test(n) || (n.match(A_SPELLED)?.length ?? 0) >= 2) reasons.push("spelled-out a-file square");
+  // After folding, any letter outside plain a-z is unverifiable (small caps, stroked letters, Cyrillic, Greek, ...).
+  // Non-ASCII decimal digits likewise. The coach writes English only, so this costs nothing.
+  if (/[^\P{L}a-z]/u.test(n) || /(?![0-9])\p{Nd}/u.test(n)) reasons.push("non-ASCII letter or digit (possible look-alike)");
   return reasons;
 }
 
@@ -209,9 +220,30 @@ export function validateAdvice(advice: CoachAdvice, ctx: CoachContext, opts: Val
         if (!allowed.has(tok)) reasons.push(`move-like token in text not in engine data: ${tok}`);
       }
     }
-    const emo = findEmotionClaim(t);
+    const emo = findEmotionClaim(t) ?? findEmotionClaim(normalizeForMoveScan(t));
     if (emo) reasons.push(`emotion claim: "${emo}"`);
   }
 
   return reasons.length === 0 ? { ok: true } : { ok: false, reasons };
+}
+
+/** Most moves shown per finding. Keeps the stored result small whatever the model sends. */
+export const MAX_REFERENCED_MOVES = 8;
+
+/**
+ * Moves to display per finding: normalised (NFKC, trimmed, no !?+# glyphs), deduplicated, members of the engine
+ * data only, capped. Never returns the model's raw string, so the display cannot carry anything but engine moves.
+ */
+export function referencedMovesByFinding(advice: CoachAdvice, ctx: CoachContext): Record<string, string[]> {
+  const allowed = allowedMoves(ctx);
+  const out: Record<string, string[]> = {};
+  for (const fa of advice.findings) {
+    const shown = new Set<string>();
+    for (const raw of fa.mentionedMoves) {
+      const m = normalizeMove(raw);
+      if (allowed.has(m) && shown.size < MAX_REFERENCED_MOVES) shown.add(m);
+    }
+    if (shown.size > 0) out[fa.findingId] = [...shown];
+  }
+  return out;
 }

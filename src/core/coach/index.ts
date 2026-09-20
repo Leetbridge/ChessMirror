@@ -7,7 +7,7 @@ export { explainFindings } from "./coach";
 export type { CoachResult, CoachSource, ExplainOptions } from "./coach";
 export { templateAdvice } from "./template";
 export type { ValidateOptions, ValidationResult } from "./validate";
-export { validateAdvice, extractMoveTokens, containsMoveLikeContent, moveLikeReasons, normalizeForMoveScan, findEmotionClaim, hasHedge } from "./validate";
+export { validateAdvice, referencedMovesByFinding, MAX_REFERENCED_MOVES, extractMoveTokens, containsMoveLikeContent, moveLikeReasons, normalizeForMoveScan, findEmotionClaim, hasHedge } from "./validate";
 export { COACH_SYSTEM_PROMPT, buildCoachPrompt } from "./prompts";
 export { checkGrounding } from "./grounding";
 export { aliasContext } from "./alias";
