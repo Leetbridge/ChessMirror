@@ -219,6 +219,14 @@ export async function runPipeline(request: ImportRequest, deps: PipelineDeps): P
       detected,
       new Map(coach.advice.findings.map((f) => [f.findingId, f.explanation])),
     );
+    const referencedMoves =
+      coach.source === "llm"
+        ? Object.fromEntries(
+            coach.advice.findings
+              .filter((f) => f.mentionedMoves.length > 0)
+              .map((f) => [f.findingId, [...new Set(f.mentionedMoves)]]),
+          )
+        : undefined;
     const plan = buildPlan(findings, { now: now().toISOString() });
     await repo.saveFindings(findings);
     await repo.savePlan(plan);
@@ -238,6 +246,7 @@ export async function runPipeline(request: ImportRequest, deps: PipelineDeps): P
       gamesAnalyzed: analyzed.length,
       findings,
       plan,
+      ...(referencedMoves && Object.keys(referencedMoves).length > 0 ? { referencedMoves } : {}),
       puzzlesAvailable: puzzles !== undefined,
       ...(puzzles ? { drillPuzzles: puzzles } : {}),
       ...(imported.assumedPlayer ? { assumedPlayer: imported.assumedPlayer } : {}),

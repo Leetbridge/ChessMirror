@@ -18,7 +18,7 @@ export function confidenceLabel(c: number): string {
   return "Weak evidence";
 }
 
-export function FindingCard({ finding }: { finding: Finding }) {
+export function FindingCard({ finding, moves }: { finding: Finding; moves?: string[] }) {
   const title = detectorLabel(finding.detector);
   if (finding.status === "insufficient_data") {
     return (
@@ -37,6 +37,17 @@ export function FindingCard({ finding }: { finding: Finding }) {
         <span className={`badge sev-${finding.severity}`}>Impact: {finding.severity}</span>
       </header>
       <p className="hypothesis">{finding.explanation}</p>
+      {moves && moves.length > 0 && (
+        <p>
+          Moves referenced (from engine data):{" "}
+          {moves.map((m, i) => (
+            <span key={m}>
+              {i > 0 && ", "}
+              <code>{m}</code>
+            </span>
+          ))}
+        </p>
+      )}
       <div className="confidence">
         <label htmlFor={`${finding.id}-c`}>
           Confidence in this hypothesis: {pct}% ({confidenceLabel(finding.confidence)})
