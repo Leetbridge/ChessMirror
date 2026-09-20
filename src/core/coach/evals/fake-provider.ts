@@ -28,7 +28,7 @@ export const GOOD_ADVICE: CoachAdvice = {
       findingId: "f-time",
       headline: "Blunders when the clock runs low",
       explanation:
-        "In 3 positions across 2 games (lichess:AAA111 ply 31 and 35, lichess:BBB222 ply 41) you moved with 9s, 6s and 4s left. At ply 31 you played Nf3 where the engine preferred d1d2. This is consistent with decisions made under time pressure.",
+        "In 3 positions across 2 games (lichess:AAA111 ply 31 and 35, lichess:BBB222 ply 41) you moved with 9s, 6s and 4s left. At ply 31 the engine preferred a different move than the one you played (both listed under the moves referenced). This is consistent with decisions made under time pressure.",
       whatToDo: "Do the one-move blunder-check puzzles with a 15 second limit, then set a half-time checkpoint before move 20.",
       citedRefs: [
         { gameId: "lichess:AAA111", ply: 31 },
@@ -40,7 +40,7 @@ export const GOOD_ADVICE: CoachAdvice = {
       findingId: "f-tilt",
       headline: "Two opening mistakes right after a loss",
       explanation:
-        "In lichess:CCC333 you made 2 mistakes (ply 12 Bxh7 and ply 14 Qxb2) while you still had about 120s. That may suggest your play changes after a defeat.",
+        "In lichess:CCC333 you made 2 mistakes (ply 12 and ply 14, listed under the moves referenced) while you still had about 120s. That may suggest your play changes after a defeat.",
       whatToDo: "Before each capture list the opponent's replies, and take the two minute reset break after a loss.",
       citedRefs: [
         { gameId: "lichess:CCC333", ply: 12 },

@@ -32,6 +32,15 @@ describe("validateAdvice", () => {
   it("accepts a good answer", () => {
     expect(validateAdvice(GOOD_ADVICE, ctx)).toEqual({ ok: true });
   });
+  it("BEHAVIOUR CHANGE: rejects even a legitimate engine move written in free text (moves go in mentionedMoves only)", () => {
+    const r = validateAdvice(withExplanation("At ply 31 you played Nf3, consistent with rushing."), ctx);
+    expect(r).toMatchObject({ ok: false });
+  });
+  it("accepts engine moves that appear only in mentionedMoves", () => {
+    const a = clone(GOOD_ADVICE);
+    expect(a.findings[0]!.mentionedMoves).toEqual(["Nf3", "d1d2"]);
+    expect(validateAdvice(a, ctx)).toEqual({ ok: true });
+  });
   it("rejects an invented move in free text", () => {
     const r = validateAdvice(withExplanation("This is consistent with rushing: Qxf7 was possible."), ctx);
     expect(r.ok).toBe(false);
@@ -64,11 +73,14 @@ describe("validateAdvice", () => {
 });
 
 describe("template fallback", () => {
-  it("is deterministic and passes its own validation and schema", () => {
+  it("is deterministic and passes the engine-membership check (template mode) and schema", () => {
     const a = templateAdvice(ctx);
     expect(templateAdvice(ctx)).toEqual(a);
     expect(CoachAdviceSchema.safeParse(a).success).toBe(true);
-    expect(validateAdvice(a, ctx)).toEqual({ ok: true });
+    // Template text is our own and names engine moves inline, so it is validated by the engine-membership oracle only.
+    expect(validateAdvice(a, ctx, { mode: "template" })).toEqual({ ok: true });
+    expect(a.findings[0]!.explanation).toContain("Nf3");
+    expect(validateAdvice(a, ctx).ok, "the strict LLM rule would reject the template text; it never applies to it").toBe(false);
     expect(a.findings).toHaveLength(2);
     expect(a.summary).toContain("1 detector had too little data");
   });
@@ -93,12 +105,12 @@ describe("explainFindings", () => {
     const r = await explainFindings(ctx, { provider: fakeProvider(() => ({ nope: 1 })) });
     expect(r).toMatchObject({ source: "template", fallbackReason: "provider output failed schema validation" });
   });
-  it("falls back when an invented move appears", async () => {
+  it("falls back when move-like text appears in free text", async () => {
     const r = await explainFindings(ctx, {
       provider: fakeProvider(() => inAliasSpace(withExplanation("Consistent with rushing; Qh7 would have been stronger."), ctx)),
     });
     expect(r.source).toBe("template");
-    expect(r.fallbackReason).toMatch(/Qh7/);
+    expect(r.fallbackReason).toMatch(/move-like content in free text/);
   });
   it("does not call the LLM when there is nothing detected", async () => {
     let called = false;

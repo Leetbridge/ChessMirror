@@ -13,9 +13,9 @@
  *  - the control (only engine moves) must be accepted, so the suite is not "reject everything".
  *  - a canary runs the same scenarios through a NON-validating path and asserts that the grounding
  *    oracle detects the invented move. If the oracle were vacuous, that test would fail.
- *  - "known bypass" payloads are recorded with it.fails: each currently gets through
- *    `validateAdvice`. When a bypass is fixed, its it.fails starts failing, which is the signal to
- *    move it to the rejected table.
+ *  - the former "known bypass" payloads (formerly it.fails) are now ordinary rejections. Design: the LLM may
+ *    name moves only via `mentionedMoves` (exact match against engine data); free text must contain no
+ *    move-like content (`containsMoveLikeContent`), so a legitimate engine move in free text is rejected too.
  */
 import { Chess } from "chess.js";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -117,8 +117,8 @@ function goodAdvice(safe: CoachContext): CoachAdvice {
         findingId: f.id,
         headline: `Pattern in ${f.evidence.length} positions`,
         explanation:
-          `In ${f.evidence.length} positions (${ref.gameId} ply ${ref.ply}) you played ${mv.playedSan}` +
-          `${best ? ` where the engine preferred ${best}` : ""}. This is consistent with a recurring pattern.`,
+          `In ${f.evidence.length} positions (${ref.gameId} ply ${ref.ply}) the engine preferred a different move ` +
+          `than the one you played (both listed as referenced moves). This is consistent with a recurring pattern.`,
         whatToDo: "Review the position above and write down two candidate moves before you play.",
         citedRefs: [{ gameId: ref.gameId, ply: ref.ply }],
         mentionedMoves: best ? [mv.playedSan, best] : [mv.playedSan],
@@ -220,13 +220,7 @@ const REJECTED: Payload[] = [
   { label: "legal-not-in-data as UCI-like phrase", text: (s) => `try ${s.legalNotInData} instead` },
   { label: "ZWSP inside UCI", text: "e2​e4" },
   { label: "ZWSP between piece letter and squares of a capture", text: "Qx​f7" },
-];
-
-/**
- * Known bypasses: each payload passes validateAdvice today and reaches the user as source "llm".
- * Recorded with it.fails. Verified by running them, see docs/verify/grounding.md.
- */
-const BYPASS: Payload[] = [
+  // --- formerly known bypasses (were it.fails before the strict free-text rule) ---
   { label: "lowercase SAN (qxf7+)", text: "qxf7+" },
   { label: "lowercase knight (nf3)", text: "nf3" },
   { label: "upper-case shouted SAN (QXF7)", text: "QXF7" },
@@ -246,6 +240,39 @@ const BYPASS: Payload[] = [
   { label: "Spanish notation (Cf3)", text: "Cf3" },
   { label: "German queen capture (Dxf7)", text: "Dxf7" },
   { label: "prose pawn push without coordinates", text: "push the h-pawn two squares" },
+  // --- new payloads, one or more per rule ---
+  { label: "long-algebraic hop (Ba3-b4)", text: "Ba3-b4" },
+  { label: "colon separator (Ba3:b4)", text: "Ba3:b4" },
+  { label: "underscore separator (Ba3_b4)", text: "Ba3_b4" },
+  { label: "en-dash separator (Ba3-b4 with U+2013)", text: "Ba3–b4" },
+  { label: "digit fused to square (1e4)", text: "1e4 e5" },
+  { label: "Greek omicron castling", text: "Ο-Ο" },
+  { label: "Cyrillic O castling", text: "О-О" },
+  { label: "minus-sign castling", text: "O−O" },
+  { label: "figure-dash long castling", text: "O‒O‒O" },
+  { label: "non-breaking hyphen castling", text: "0‑0" },
+  { label: "ZWSP inside castling", text: "O​-​O" },
+  { label: "castling word", text: "castle kingside now" },
+  { label: "German castling word", text: "Rochade" },
+  { label: "soft hyphen inside a square", text: "e­4" },
+  { label: "word joiner + space inside a square", text: "f⁠ 3" },
+  { label: "Hangul filler between piece and square", text: "Nㅤf3" },
+  { label: "combining accent on the file letter", text: "é4" },
+  { label: "Latin script-g look-alike", text: "ɡ1" },
+  { label: "small-capital look-alike", text: "ꜰ3" },
+  { label: "Arabic-Indic rank digit", text: "Nf٣" },
+  { label: "hyphenated file-rank (e-4)", text: "e-4" },
+  { label: "numbered sequence (12. Qd8)", text: "12. Qd8" },
+  { label: "piece + verb (rook goes)", text: "the rook goes to the back rank" },
+  { label: "piece takes piece", text: "knight takes bishop" },
+  { label: "passive capture", text: "the queen was captured" },
+  { label: "French prose", text: "le cavalier prend" },
+  { label: "German prose", text: "der Springer zieht nach vorn" },
+  { label: "Spanish prose", text: "el caballo captura" },
+  { label: "trade phrase", text: "trade queens" },
+  { label: "sacrifice phrase", text: "sacrifice the exchange with the rook" },
+  { label: "file pawn advance", text: "the h-pawn advances" },
+  { label: "spelled-out square (e four)", text: "e four" },
 ];
 
 // ---------------------------------------------------------------------------------------------
@@ -264,7 +291,8 @@ describe("scenarios come from the real pipeline", () => {
 
   it("injected payloads are genuinely not engine data in any scenario", () => {
     for (const s of scenarios) {
-      for (const p of REJECTED) {
+      // Hop payloads start with an engine move on purpose (allowed source square, invented destination).
+      for (const p of REJECTED.filter((x) => !/^(?:long-algebraic hop|colon|underscore|en-dash separator)/.test(x.label))) {
         const t = resolve(p, s);
         for (const tok of extractMoveTokens(t)) {
           expect(s.allowed.has(tok), `${s.name}: '${p.label}' token ${tok} is unexpectedly allowed`).toBe(false);
@@ -292,7 +320,7 @@ describe("control: only engine moves are accepted (suite is not reject-everythin
     }
   });
 
-  it("accepts engine moves in every notation the data allows (SAN, UCI, annotated, checked)", async () => {
+  it("accepts engine moves in every notation the data allows when they are in mentionedMoves ONLY", async () => {
     for (const s of scenarios) {
       const mv = s.safe.moves[0]!;
       const variants = [mv.playedSan, `${mv.playedSan}!`, `${mv.playedSan}+`, mv.playedUci, mv.bestSan, mv.bestUci].filter(
@@ -300,10 +328,27 @@ describe("control: only engine moves are accepted (suite is not reject-everythin
       );
       for (const v of variants) {
         const a = goodAdvice(s.safe);
-        a.findings[0]!.explanation += ` Compare ${v} with what happened.`;
+        a.findings[0]!.mentionedMoves = [v];
         const res = await run(s, a);
         expect(res.source, `${s.name}: ${v}: ${res.fallbackReason}`).toBe("llm");
+        expect(res.advice.findings[0]!.mentionedMoves).toEqual([v]);
         expect(violations(res.advice, s.allowed)).toEqual([]);
+      }
+    }
+  });
+
+  it("BEHAVIOUR CHANGE: the same legitimate engine moves written in free text are now REJECTED", async () => {
+    for (const s of scenarios) {
+      const mv = s.safe.moves[0]!;
+      const variants = [mv.playedSan, `${mv.playedSan}!`, `${mv.playedSan}+`, mv.playedUci, mv.bestSan, mv.bestUci].filter(
+        (x): x is string => x !== undefined,
+      );
+      for (const v of variants) {
+        for (const field of TEXT_FIELDS) {
+          const res = await run(s, inject(goodAdvice(s.safe), field, `compare ${v} with what happened`));
+          expect(res.source, `${s.name}/${field}: ${v}`).toBe("template");
+          expect(res.fallbackReason).toMatch(/move-like content in free text/);
+        }
       }
     }
   });
@@ -312,6 +357,8 @@ describe("control: only engine moves are accepted (suite is not reject-everythin
     for (const s of scenarios) {
       const t = templateAdvice(s.ctx);
       expect(violations(t, s.allowed), s.name).toEqual([]);
+      // The template is our own text: validated by engine membership only, never by the strict free-text rule.
+      expect(validateAdvice(t, s.ctx, { mode: "template" }), s.name).toEqual({ ok: true });
     }
   });
 });
@@ -461,48 +508,47 @@ describe("CANARY: the grounding oracle is not vacuous", () => {
   });
 });
 
-describe("KNOWN BYPASSES (it.fails): an invented move passes validateAdvice and is shown as source 'llm'", () => {
-  // Each expectation states the DESIRED behaviour (fall back to the template). It.fails passes while
-  // the bypass exists. If one of these starts failing, the hole was fixed: move it to REJECTED.
-  for (const p of BYPASS) {
-    it.fails(`${p.label}`, async () => {
-      const s = scenarios[0]!;
-      const text = resolve(p, s);
-      const res = await run(s, inject(goodAdvice(s.safe), "explanation", text));
-      expect(res.source).toBe("template");
-    });
-  }
-
-  it("bypass payloads reach the final output verbatim (they are real leaks, not test artefacts)", async () => {
-    const s = scenarios[0]!;
-    for (const p of BYPASS) {
-      const text = resolve(p, s);
-      const res = await run(s, inject(goodAdvice(s.safe), "explanation", text));
-      expect(res.source, `${p.label} should currently leak`).toBe("llm");
-      expect(res.advice.findings[0]!.explanation, p.label).toContain(text);
+describe("former known bypasses, now rejections (no it.fails left)", () => {
+  it("every former bypass payload falls back to the template, in every text field of every scenario", async () => {
+    const former = REJECTED.slice(REJECTED.findIndex((p) => p.label.startsWith("lowercase SAN")));
+    expect(former.length).toBeGreaterThanOrEqual(19);
+    for (const p of former) {
+      for (const s of scenarios) {
+        for (const field of TEXT_FIELDS) {
+          const res = await run(s, inject(goodAdvice(s.safe), field, resolve(p, s)));
+          expect(res.source, `${p.label} in ${s.name}/${field}`).toBe("template");
+          expect(violations(res.advice, s.allowed, resolve(p, s)), p.label).toEqual([]);
+        }
+      }
     }
   });
 
-  it.fails("long-algebraic hop: allowed source square hides an invented destination (Ba3-b4)", async () => {
-    // "Ba3" is engine data; "-b4" is skipped by the lookbehind (?<![A-Za-z0-9:_-]).
+  it("long-algebraic hop: an allowed source square no longer hides an invented destination (Ba3-b4)", async () => {
     const s = scenarios[0]!;
-    expect(s.allowed.has("Ba3")).toBe(true);
-    const res = await run(s, inject(goodAdvice(s.safe), "explanation", "Ba3-b4"));
+    // "Ba3" style engine data is allowed on its own (in mentionedMoves) but the hop in free text is not.
+    const allowedSan = [...s.allowed].find((m) => /^[KQRBN][a-h][1-8]$/.test(m));
+    const hop = allowedSan ? `${allowedSan}-b4` : "Ba3-b4";
+    const res = await run(s, inject(goodAdvice(s.safe), "explanation", hop));
     expect(res.source).toBe("template");
   });
 
-  it.fails("colon / underscore separators hide an invented destination (Ba3:b4, Ba3_b4)", async () => {
-    const s = scenarios[0]!;
-    const a = await run(s, inject(goodAdvice(s.safe), "explanation", "Ba3:b4"));
-    const b = await run(s, inject(goodAdvice(s.safe), "explanation", "Ba3_b4"));
-    expect(a.source === "template" && b.source === "template").toBe(true);
-  });
-
-  it.fails("invented move is not declared in mentionedMoves: undeclared prose move is accepted when regex is blind", async () => {
+  it("undeclared prose move without notation is rejected when it uses a capture phrase", async () => {
     const s = scenarios[0]!;
     const a = goodAdvice(s.safe);
     a.findings[0]!.explanation += " Better was to capture the queen with the knight, giving a strong attack.";
     const res = await run(s, a);
     expect(res.source).toBe("template");
+  });
+});
+
+describe("RESIDUAL RISK: pure prose with no square, notation or piece phrase cannot be excluded by any regex", () => {
+  // Not a test of desired behaviour: it records that this class exists, so nobody claims airtightness.
+  // The prompt forbids it; see docs/KNOWN-LIMITATIONS.md. If this starts failing (rejected), tighten the docs, not the test.
+  it("documented example is accepted as source 'llm' (kept honest here)", async () => {
+    const s = scenarios[0]!;
+    const a = goodAdvice(s.safe);
+    a.findings[0]!.explanation += " Retreating one step to the left would have avoided the loss.";
+    const res = await run(s, a);
+    expect(res.source).toBe("llm");
   });
 });
