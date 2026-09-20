@@ -92,14 +92,23 @@ export function thrownScenario(thrown: number, converted: number, neverWinning =
   ];
 }
 
-/** 6 games: 20 calm moves then 2 errors. Spent time per error is configurable; `before` is the win% before the error. */
-export function fastScenario(errorSpentMs: number, errorBefore = 50): AnalyzedGame[] {
+export type TC = { initialSec: number; incrementSec: number };
+export const BULLET: TC = { initialSec: 60, incrementSec: 0 };
+export const RAPID: TC = { initialSec: 900, incrementSec: 10 };
+
+/**
+ * 6 games: 20 calm moves then 2 errors. Spent time per error is configurable; `before` is the win% before the error.
+ * `tc` defaults to 10+0; use BULLET (calm moves then take 0.5s each) or RAPID.
+ */
+export function fastScenario(errorSpentMs: number, errorBefore = 50, tc?: TC | null): AnalyzedGame[] {
+  const calmSpent = tc ? Math.min(10_000, (tc.initialSec * 1000 * 0.4) / 20) : 10_000;
   return range(6).map((i) =>
     buildGame({
       id: id("fast", i),
       result: "black",
+      ...(tc !== undefined ? { timeControl: tc } : {}),
       moves: [
-        ...calmMoves(20),
+        ...calmMoves(20, 50, calmSpent),
         { winPct: errorBefore - 25, before: errorBefore, cls: "blunder", spentMs: errorSpentMs },
         { winPct: errorBefore - 30, before: errorBefore, cls: "mistake", spentMs: errorSpentMs },
       ],
@@ -108,13 +117,14 @@ export function fastScenario(errorSpentMs: number, errorBefore = 50): AnalyzedGa
 }
 
 /** 6 lost games: 10 calm moves then `hopelessMoves` hopeless ones (first hopeless move is ply 21). */
-export function lostScenario(hopelessMoves: number, count = 6): AnalyzedGame[] {
+export function lostScenario(hopelessMoves: number, count = 6, tc?: TC): AnalyzedGame[] {
   return range(count).map((i) =>
     buildGame({
       id: id("lost", i),
       result: "black",
+      ...(tc ? { timeControl: tc } : {}),
       moves: [
-        ...calmMoves(10),
+        ...calmMoves(10, 50, tc ? Math.min(10_000, (tc.initialSec * 1000 * 0.4) / 20) : 10_000),
         ...range(hopelessMoves).map((): UserMoveSpec => ({ winPct: 2, cls: "blunder" })),
       ],
     }),

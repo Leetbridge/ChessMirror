@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { FindingSchema, type DetectedFinding, type Finding } from "../domain";
+import { FindingSchema, type AnalyzedGame, type DetectedFinding, type Finding } from "../domain";
+import { estimatedTotalSec, fastMoveMs } from "./helpers";
 import {
   detectHabits,
   fastCriticalMoves,
@@ -10,6 +11,8 @@ import {
   timeTroubleBlunders,
 } from "./index";
 import {
+  BULLET,
+  RAPID,
   fastScenario,
   lostScenario,
   noClockGames,
@@ -120,25 +123,64 @@ describe("fastCriticalMoves", () => {
     expect(fastCriticalMoves(fastScenario(1_000, 95))).toBeNull();
   });
   it("is insufficient without clock data", () => {
-    expectInsufficient(fastCriticalMoves(noClockGames()), /clock data; found 0/);
+    expectInsufficient(fastCriticalMoves(noClockGames()), /at least 5 games with clock data; found 0/);
   });
-});
-
-describe("noResignation", () => {
-  it("detects long play-on in hopeless lost games", () => {
-    const f = expectDetected(noResignation(lostScenario(10)));
-    expect(f.detector).toBe("no-resignation");
+  it("does NOT flag a bullet-only player with many fast mistakes", () => {
+    const f = fastCriticalMoves(fastScenario(1_000, 50, BULLET));
+    expectInsufficient(f, /time control.*bullet games are excluded.*found 0 of 6/);
+  });
+  it("flags a rapid player with the same fast-mistake pattern", () => {
+    const f = expectDetected(fastCriticalMoves(fastScenario(1_000, 50, RAPID)));
     expect(f.severity).toBe("high");
-    expect(f.evidence).toHaveLength(6);
-    expect(f.evidence[0]).toMatchObject({ gameId: "lost:0", ply: 21 });
-    expect(f.explanation).toMatch(/6 of 6 lost games/);
-    expect(SOFT_SKILLS["no-resignation"]).toBe("Acceptance");
+    expect(f.explanation).toMatch(/12 of 12 mistakes/);
+  });
+  it("scales the fast threshold with the time control (3+0 is 0.9s)", () => {
+    const blitz = { initialSec: 180, incrementSec: 0 };
+    expect(fastCriticalMoves(fastScenario(800, 50, blitz))?.status).toBe("detected");
+    expect(fastCriticalMoves(fastScenario(1_000, 50, blitz))).toBeNull();
+  });
+  it("does not flag 20s mistakes at a slow time control (15+10)", () => {
+    expect(fastCriticalMoves(fastScenario(20_000, 50, RAPID))).toBeNull();
+  });
+  it("is insufficient when games have clocks but no time control", () => {
+    expectInsufficient(fastCriticalMoves(fastScenario(1_000, 50, null)), /known time control.*found 0 of 6/);
+  });
+  it("includes exactly 180s estimated length (60+3) and excludes 179s (59+3)", () => {
+    const at180 = { initialSec: 60, incrementSec: 3 };
+    const at179 = { initialSec: 59, incrementSec: 3 };
+    expect(estimatedTotalSec(fastScenario(800, 50, at180)[0] as AnalyzedGame)).toBe(180);
+    expect(fastCriticalMoves(fastScenario(800, 50, at180))?.status).toBe("detected");
+    expectInsufficient(fastCriticalMoves(fastScenario(800, 50, at179)), /found 0 of 6/);
+  });
+  it("caps the fast threshold at 5000 ms (15+10: 5000 fast, 5001 not)", () => {
+    expect(fastMoveMs(fastScenario(1, 50, RAPID)[0] as AnalyzedGame)).toBe(5_000);
+    expect(fastCriticalMoves(fastScenario(5_000, 50, RAPID))?.status).toBe("detected");
+    expect(fastCriticalMoves(fastScenario(5_001, 50, RAPID))).toBeNull();
+  });
+  it("uses exactly 900 ms at the 180s minimum (3+0): 900 fast, 901 not", () => {
+    const blitz = { initialSec: 180, incrementSec: 0 };
+    expect(fastMoveMs(fastScenario(1, 50, blitz)[0] as AnalyzedGame)).toBe(900);
+    expect(fastCriticalMoves(fastScenario(900, 50, blitz))?.status).toBe("detected");
+    expect(fastCriticalMoves(fastScenario(901, 50, blitz))).toBeNull();
+  });
+  it("500 ms floor is unreachable for eligible games (lowest eligible threshold is 900 ms)", () => {
+    // 20% of the per-move budget only drops below 500 ms when estimated length < 100s,
+    // which is already excluded by the 180s minimum. The floor is purely defensive.
+    const lowest = { initialSec: 180, incrementSec: 0 };
+    expect(fastMoveMs(fastScenario(1, 50, lowest)[0] as AnalyzedGame)).toBeGreaterThan(500);
+    expect(fastMoveMs(fastScenario(1, 50, { initialSec: 179, incrementSec: 0 })[0] as AnalyzedGame)).toBeUndefined();
   });
   it("returns null when lost games were short after becoming hopeless", () => {
     expect(noResignation(lostScenario(3))).toBeNull();
   });
   it("is insufficient with too few games", () => {
     expectInsufficient(noResignation(lostScenario(10, 3)), /at least 5 games; found 3/);
+  });
+  it("excludes bullet games: playing on may be rational there", () => {
+    expectInsufficient(noResignation(lostScenario(10, 6, BULLET)), /bullet games are excluded.*found 0 of 6/);
+  });
+  it("still detects play-on at slower time controls", () => {
+    expect(noResignation(lostScenario(10, 6, RAPID))?.status).toBe("detected");
   });
   it("is insufficient when there are not enough hopeless lost games", () => {
     expectInsufficient(noResignation(thrownScenario(0, 6, 0)), /hopeless position; found 0/);

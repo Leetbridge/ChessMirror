@@ -55,6 +55,9 @@ export const TILT_MIN_BLUNDERS = 3;
 /** Post-loss blunder-per-move rate vs baseline: minimum ratio and absolute difference. */
 export const TILT_RATE_RATIO = 1.5;
 export const TILT_MIN_RATE_DIFF = 0.015;
+// Known limitation: tilt compares a player's own post-loss games with their other
+// games without normalising for time control. A player who mixes bullet and slower
+// games may show a spurious difference. Not handled in v0.
 /** Ratio cut-offs for severity. */
 export const TILT_SEVERITY_MEDIUM = 2;
 export const TILT_SEVERITY_HIGH = 3;
@@ -74,8 +77,28 @@ export const THROW_SEVERITY_HIGH = 0.6;
 
 // --- Too-fast moves in critical positions ---
 
-/** A move played in at most this many ms of clock spent counts as fast. */
-export const FAST_MOVE_MS = 3_000;
+/**
+ * Time-control model shared by the detectors below. A game's estimated length is
+ * `initialSec + EST_MOVES * incrementSec` (the Lichess-style "estimated duration").
+ * Uncalibrated.
+ */
+export const EST_MOVES = 40;
+/**
+ * Games with a known estimated length under this many seconds (bullet and below)
+ * are excluded from fast-critical-moves and no-resignation: in bullet nearly every
+ * move is fast and playing on is often rational (the opponent may flag).
+ * 180 matches the Lichess bullet/blitz boundary (3+0 is the shortest included).
+ */
+export const MIN_ESTIMATED_TOTAL_SEC = 180;
+
+/**
+ * "Fast" is relative to the time control: at most this fraction of the per-move
+ * budget (estimated length / EST_MOVES)...
+ */
+export const FAST_BUDGET_FRACTION = 0.2;
+/** ...clamped to this range in ms (so 10+0 gives 3s, 3+0 gives 0.9s, 15+10 gives 5s). */
+export const FAST_MOVE_MIN_MS = 500;
+export const FAST_MOVE_MAX_MS = 5_000;
 /** "Critical" = mover win% before the move within this band (position still balanced/decidable). */
 export const CRITICAL_MIN_WIN_PCT = 30;
 export const CRITICAL_MAX_WIN_PCT = 85;

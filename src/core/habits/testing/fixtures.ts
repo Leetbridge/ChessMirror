@@ -88,9 +88,9 @@ export function buildGame(spec: GameSpec): AnalyzedGame {
   });
 }
 
-/** `n` calm, clean moves (win% steady at `level`), 10s per move, so ample clock in a 10+0 game. */
-export function calmMoves(n: number, level = 50): UserMoveSpec[] {
-  return Array.from({ length: n }, () => ({ winPct: level, before: level, cls: "good" as MoveClass, spentMs: 10_000 }));
+/** `n` calm, clean moves (win% steady at `level`), `spentMs` per move (default 10s: ample clock in a 10+0 game). */
+export function calmMoves(n: number, level = 50, spentMs = 10_000): UserMoveSpec[] {
+  return Array.from({ length: n }, () => ({ winPct: level, before: level, cls: "good" as MoveClass, spentMs }));
 }
 
 /** ISO timestamp `minutes` after `startIso`. */

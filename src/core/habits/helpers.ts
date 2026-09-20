@@ -1,7 +1,12 @@
 import type { AnalyzedGame, AnalyzedMove, EvidenceRef, InsufficientDataFinding, Severity } from "../domain";
 import {
   CLOCK_COVERAGE_MIN,
+  EST_MOVES,
+  FAST_BUDGET_FRACTION,
+  FAST_MOVE_MAX_MS,
+  FAST_MOVE_MIN_MS,
   MAX_EVIDENCE,
+  MIN_ESTIMATED_TOTAL_SEC,
   TIME_TROUBLE_CAP_MS,
   TIME_TROUBLE_FALLBACK_MS,
   TIME_TROUBLE_FRACTION,
@@ -72,4 +77,24 @@ export function severityBy(value: number, medium: number, high: number): Severit
 
 export function insufficient(detector: string, reason: string): InsufficientDataFinding {
   return { id: detector, detector, status: "insufficient_data", reason };
+}
+
+/** Estimated game length in seconds (`initial + EST_MOVES * increment`), or undefined without a time control. */
+export function estimatedTotalSec(g: AnalyzedGame): number | undefined {
+  const tc = g.game.timeControl;
+  return tc ? tc.initialSec + EST_MOVES * tc.incrementSec : undefined;
+}
+
+/** True only when the time control is known and shorter than MIN_ESTIMATED_TOTAL_SEC. */
+export function isBulletOrShorter(g: AnalyzedGame): boolean {
+  const t = estimatedTotalSec(g);
+  return t !== undefined && t < MIN_ESTIMATED_TOTAL_SEC;
+}
+
+/** Per-game "fast move" threshold in ms, relative to the time control; undefined if it cannot be determined. */
+export function fastMoveMs(g: AnalyzedGame): number | undefined {
+  const t = estimatedTotalSec(g);
+  if (t === undefined || t < MIN_ESTIMATED_TOTAL_SEC) return undefined;
+  const budgetMs = (t / EST_MOVES) * 1000;
+  return Math.min(FAST_MOVE_MAX_MS, Math.max(FAST_MOVE_MIN_MS, budgetMs * FAST_BUDGET_FRACTION));
 }

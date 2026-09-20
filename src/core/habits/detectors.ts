@@ -3,8 +3,10 @@ import * as C from "./constants";
 import {
   capEvidence,
   confidence,
+  fastMoveMs,
   hasClockData,
   insufficient,
+  isBulletOrShorter,
   outcome,
   ref,
   severityBy,
@@ -175,15 +177,24 @@ export const thrownWins: HabitDetector = (games) => {
 
 export const fastCriticalMoves: HabitDetector = (games) => {
   const id = "fast-critical-moves";
-  const clocked = games.filter(hasClockData);
+  const withClock = games.filter(hasClockData);
+  // "Fast" only makes sense relative to the time control; skip bullet and unknown time controls.
+  if (withClock.length < C.MIN_CLOCKED_GAMES) {
+    return insufficient(id, `Needs at least ${C.MIN_CLOCKED_GAMES} games with clock data; found ${withClock.length}.`);
+  }
+  const clocked = withClock.filter((g) => fastMoveMs(g) !== undefined);
   if (clocked.length < C.MIN_CLOCKED_GAMES) {
-    return insufficient(id, `Needs at least ${C.MIN_CLOCKED_GAMES} games with clock data; found ${clocked.length}.`);
+    return insufficient(
+      id,
+      `Needs at least ${C.MIN_CLOCKED_GAMES} games with clock data and a known time control of at least ${C.MIN_ESTIMATED_TOTAL_SEC}s estimated length (bullet games are excluded, since almost every move is fast there); found ${clocked.length} of ${withClock.length} games with clock data.`,
+    );
   }
   let errors = 0, fast = 0;
   const evidence: EvidenceRef[] = [];
   const gameIds = new Set<string>();
   for (const g of clocked) {
     const limit = timeTroubleMs(g);
+    const fastLimit = fastMoveMs(g) ?? 0;
     for (const m of userMoves(g)) {
       if (m.class !== "mistake" && m.class !== "blunder") continue;
       const before = winPctBefore(g, m);
@@ -192,7 +203,7 @@ export const fastCriticalMoves: HabitDetector = (games) => {
       // Only errors with ample clock and in still-decidable positions (time trouble has its own detector).
       if (m.clockMs <= limit || before < C.CRITICAL_MIN_WIN_PCT || before > C.CRITICAL_MAX_WIN_PCT) continue;
       errors++;
-      if (spent <= C.FAST_MOVE_MS) {
+      if (spent <= fastLimit) {
         fast++;
         gameIds.add(g.game.id);
         evidence.push(ref(g.game.id, m.ply, `${m.class} played in ${(spent / 1000).toFixed(1)}s in a critical position`));
@@ -206,7 +217,7 @@ export const fastCriticalMoves: HabitDetector = (games) => {
     severity: share >= C.FAST_SEVERITY_HIGH ? "high" : "medium",
     confidence: confidence(fast, 10),
     explanation:
-      `${fast} of ${plural(errors, "mistake")} made with plenty of time on the clock in balanced positions took ${C.FAST_MOVE_MS / 1000} seconds or less (${pct(share)}), across ${plural(gameIds.size, "game")}. ` +
+      `${fast} of ${plural(errors, "mistake")} made with plenty of time on the clock in balanced positions were played quickly for the time control (${pct(share)}), across ${plural(gameIds.size, "game")}. ` +
       `This is consistent with moving quickly in moments that deserve a longer think, and may suggest slowing down when the position gets sharp.`,
   });
 };
@@ -222,7 +233,16 @@ export const noResignation: HabitDetector = (games) => {
   if (games.length < C.MIN_GAMES) {
     return insufficient(id, `Needs at least ${C.MIN_GAMES} games; found ${games.length}.`);
   }
-  const lost = games.filter((g) => outcome(g) === "loss");
+  // Bullet is excluded: playing on is often rational there because the opponent may flag.
+  // Games without a time control are kept (we cannot tell).
+  const eligible = games.filter((g) => !isBulletOrShorter(g));
+  if (eligible.length < C.MIN_GAMES) {
+    return insufficient(
+      id,
+      `Needs at least ${C.MIN_GAMES} games with a time control of at least ${C.MIN_ESTIMATED_TOTAL_SEC}s estimated length (bullet games are excluded, since playing on is often reasonable there); found ${eligible.length} of ${games.length}.`,
+    );
+  }
+  const lost = eligible.filter((g) => outcome(g) === "loss");
   const hopeless = lost
     .map((g) => {
       const mine = userMoves(g);
