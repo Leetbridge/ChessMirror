@@ -1,0 +1,27 @@
+# Known limitations (v0)
+
+Honest list of what is not done or uncertain.
+
+## Not done
+- v1 to v4: courses, repertoire builder, endgame trainer, voice coach and mirror profile.
+- Curriculum beyond a per-finding plan (chess drill, soft-skill drill, puzzles by theme).
+- Puzzle board rendering; puzzles link out to Lichess.
+- Auth, rate limiting per user, streaming body-size cutoff on `POST /api/analyze`. Single-user local tool only: do not expose it publicly.
+- Result file cleanup beyond a 200-file / 30-day retention rule.
+- Supabase option (interface only).
+
+## Uncertain or unverified
+- Habit thresholds are uncalibrated guesses (see `src/core/habits/constants.ts`). Only checked on three real accounts.
+- `tilt-after-loss` does not normalise for time control; mixed bullet and slower games can produce a spurious difference.
+- `no-resignation` measures playing on in hopeless positions, not actual resignations (Lichess PGN does not record resignation). It skips games under about 3 minutes.
+- `FAST_MOVE_MIN_MS` is unreachable in practice (defensive).
+- Classifier: mate scores are treated as plus or minus 1000 cp; "good" and "best" labels are our own; middlegame detection differs slightly from Lichess.
+- The Anthropic path (`ANTHROPIC_API_KEY`) has only been run against a fake client. Token limits and effort settings are untuned.
+- chess.com import has not been run against the live API in the app (only recorded fixtures and one archive parse).
+- The full Lichess puzzle dump (about 290 MB) has not been indexed; only a 300,000-row sample. The rating window (plus or minus 300) is a guess.
+- Node 20 needs the system `zstd` binary for `npm run setup:puzzles`.
+- `better-sqlite3` is pinned to 12.x for Node 20; 13.x needs Node 22.
+- Pasted PGN guesses the player as the most frequent name; the UI shows the guess.
+- TypeScript is pinned to 5.9 and ESLint to 9; newer majors are unverified against Next 16.
+- The web UI has been checked by tests, build and a dev-server smoke test (page loads, API accepts a job), not by a full browser walkthrough.
+- CI workflow has never run (nothing pushed yet).

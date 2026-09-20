@@ -4,13 +4,13 @@ An open-source AI chess coach that shows you your own habits, not just your blun
 
 ## Why ChessMirror
 
-1. **Open source (Apache-2.0).** The code, the detectors and the prompts are all in the repo. Your data is meant to stay local: no accounts, and a local SQLite file is the planned storage (decided in ADR 0003, not yet implemented).
+1. **Open source (Apache-2.0).** The code, the detectors and the prompts are all in the repo. Your data is meant to stay local: no accounts, and results are stored in a local SQLite file plus JSON result files under `./data/` (ADR 0003).
 2. **A soft-skills "mirror".** Chess tools tell you which move was bad. ChessMirror looks across your games for behavioral patterns (for example, blunders when your clock is low, or a run of quick moves after a loss) and shows them to you as *hypotheses*, worded like "this pattern is consistent with...". It does not detect emotions and never claims to. Each finding comes with evidence you can check (game and move references), a chess drill and a soft-skill drill.
 3. **A beginner-to-GM curriculum (planned).** The goal is a full learning path from first moves to grandmaster-level preparation. See the [roadmap](ROADMAP.md). None of the curriculum exists yet.
 
 ## Status: v0, early and incomplete
 
-This project is at the start of v0. The architecture, domain types, lint boundaries and test setup are in place. Feature work (game import, engine analysis, the five habit detectors, coaching text, dashboard) is in progress and tracked in [docs/TASKS.md](docs/TASKS.md). Do not expect a working coach yet. The SQLite store and puzzle indexer exist in `src/core`, and the v0 UI currently runs on a mock analysis service until the real pipeline is wired in.
+v0 works end to end from the command line and the local web UI: import (Lichess, chess.com, pasted PGN), Stockfish analysis, five habit detectors, a personal plan with puzzles by theme, and coaching text (templated, or LLM-written when `ANTHROPIC_API_KEY` is set). It is early software: thresholds are uncalibrated and results are hypotheses. See [docs/KNOWN-LIMITATIONS.md](docs/KNOWN-LIMITATIONS.md) for what is not done or uncertain. Set `CHESSMIRROR_MOCK=1` to run the UI on fake data without Stockfish.
 
 **Security note:** ChessMirror is a single-user local tool. Do not expose it to the public internet without adding authentication and rate limiting first.
 
