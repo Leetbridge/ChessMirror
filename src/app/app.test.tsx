@@ -105,6 +105,14 @@ describe("components", () => {
     expect(html).toContain("Evidence (3 positions)");
     expect(html).not.toMatch(/\b(anxious|angry|frustrated|emotion|tilted)\b/i);
   });
+  it("FindingCard shows referenced moves separately and escapes them", () => {
+    const f = result.findings.find((x) => x.status === "detected")!;
+    const html = renderToStaticMarkup(<FindingCard finding={f} moves={["Nf3", "<b>x</b>"]} />);
+    expect(html).toContain("Moves referenced");
+    expect(html).toContain("<code>Nf3</code>");
+    expect(html).not.toContain("<b>x</b>");
+    expect(renderToStaticMarkup(<FindingCard finding={f} />)).not.toContain("Moves referenced");
+  });
   it("FindingCard shows the reason for insufficient data", () => {
     const f = result.findings.find((x) => x.status === "insufficient_data");
     if (!f || f.status !== "insufficient_data") throw new Error("fixture");

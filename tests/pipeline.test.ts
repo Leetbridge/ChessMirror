@@ -100,6 +100,49 @@ describe("runPipeline with a fake engine and fixture PGNs", () => {
   });
 });
 
+describe("LLM moves shown in the result", () => {
+  /** A provider that answers from the prompt's DATA block, with moves only in mentionedMoves and hostile glyph suffixes. */
+  function glyphProvider(suffix: string) {
+    return {
+      name: "glyphs",
+      async generate<T>(req: { prompt: string }): Promise<T> {
+        const data = JSON.parse(req.prompt.split("<DATA>")[1]!.split("</DATA>")[0]!) as {
+          findings: { id: string; evidence: { gameId: string; ply: number }[] }[];
+          engineMoves: { playedSan: string; playedUci: string }[];
+        };
+        const m = data.engineMoves[0]!;
+        return {
+          summary: "Patterns found in your games; these are hypotheses.",
+          findings: data.findings.map((f) => ({
+            findingId: f.id,
+            headline: "Pattern in your games",
+            explanation: "This is consistent with a recurring pattern in the listed games.",
+            whatToDo: "Review the listed games and plies.",
+            citedRefs: [f.evidence[0]!],
+            mentionedMoves: [`${m.playedSan}${suffix}`, ` ${m.playedSan} `, m.playedUci, m.playedUci],
+          })),
+        } as T;
+      },
+    };
+  }
+
+  it("does not crash on very long annotation glyphs and stores only short normalised engine moves", async () => {
+    const f = fakeFetch(copies("pgn/winning_position_thrown_away.pgn", 6));
+    const out = await runPipeline(
+      { source: "lichess", username: "SyntheticHero" },
+      deps(new FakeEngine(), f, { provider: glyphProvider("!".repeat(40)) }),
+    );
+    expect(out.coachSource).toBe("llm");
+    const moves = Object.values(out.result.referencedMoves ?? {});
+    expect(moves.length).toBeGreaterThan(0);
+    for (const list of moves) {
+      expect(list.length).toBeLessThanOrEqual(2); // san + uci, deduplicated
+      for (const m of list) expect(m).toMatch(/^[A-Za-z0-9=-]{2,8}$/);
+    }
+    expect(ResultSchema.safeParse(out.result).success).toBe(true);
+  });
+});
+
 describe("user-facing errors", () => {
   it("fails fast with a Stockfish message before touching the network", async () => {
     const f = fakeFetch("");

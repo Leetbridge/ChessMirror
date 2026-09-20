@@ -106,7 +106,7 @@ export function allowedMoves(ctx: CoachContext): Set<string> {
 }
 
 export function normalizeMove(s: string): string {
-  return s.trim().replace(/[+#!?]+$/g, "");
+  return s.normalize("NFKC").trim().replace(/[\s+#!?]+$/g, "");
 }
 
 export function formatClock(ms: number): string {

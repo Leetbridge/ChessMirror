@@ -44,7 +44,7 @@ describe.skipIf(!liveKey)("eval: live provider (needs ANTHROPIC_API_KEY)", () =>
     const r = await explainFindings(ctx, provider ? { provider } : {});
     // A live model may legitimately fail post-validation; the fallback must still be grounded.
     console.info(`live coach source=${r.source} reason=${r.fallbackReason ?? "-"}`);
-    expect(validateAdvice(r.advice, ctx)).toEqual({ ok: true });
+    expect(validateAdvice(r.advice, ctx, { mode: r.source === "llm" ? "llm" : "template" })).toEqual({ ok: true });
     expect(checkGrounding(r.advice, ctx).ok).toBe(true);
   }, 120_000);
 });

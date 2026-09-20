@@ -29,7 +29,7 @@ export function FindingsList({ result }: { result: AnalysisResult }) {
           <h2 id="detected-h">Possible patterns</h2>
           <div className="grid">
             {detected.map((f) => (
-              <FindingCard key={f.id} finding={f} />
+              <FindingCard key={f.id} finding={f} {...(result.referencedMoves?.[f.id] ? { moves: result.referencedMoves[f.id] } : {})} />
             ))}
           </div>
         </section>
