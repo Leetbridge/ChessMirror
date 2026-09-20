@@ -10,7 +10,7 @@ An open-source AI chess coach that shows you your own habits, not just your blun
 
 ## Status: v0, early and incomplete
 
-This project is at the start of v0. The architecture, domain types, lint boundaries and test setup are in place. Feature work (game import, engine analysis, the five habit detectors, coaching text, dashboard) is in progress and tracked in [docs/TASKS.md](docs/TASKS.md). `npm run setup:puzzles` is currently a stub. Do not expect a working coach yet. Storage in SQLite is planned but not implemented, and the v0 UI currently runs on a mock analysis service until the real pipeline is wired in.
+This project is at the start of v0. The architecture, domain types, lint boundaries and test setup are in place. Feature work (game import, engine analysis, the five habit detectors, coaching text, dashboard) is in progress and tracked in [docs/TASKS.md](docs/TASKS.md). Do not expect a working coach yet. The SQLite store and puzzle indexer exist in `src/core`, and the v0 UI currently runs on a mock analysis service until the real pipeline is wired in.
 
 **Security note:** ChessMirror is a single-user local tool. Do not expose it to the public internet without adding authentication and rate limiting first.
 
@@ -32,7 +32,8 @@ cp .env.example .env
 1. **Install Stockfish separately** (with your package manager or from the official Stockfish site) and set `STOCKFISH_PATH` in `.env` to the binary. Stockfish is GPL, so ChessMirror does not bundle or vendor it (see [ADR 0002](docs/adr/0002-external-stockfish.md)).
 2. `ANTHROPIC_API_KEY` is **optional**. Leave it empty and explanations use a template fallback.
 3. Set `CHESSCOM_USER_AGENT` in `.env` to something descriptive with your own contact.
-4. Start the dev server:
+4. **Optional, for puzzle drills:** `npm run setup:puzzles` downloads the Lichess puzzle database (about 290 MiB) and indexes a subset locally. It needs the system `zstd` binary (`brew install zstd` or `apt install zstd`) on Node 20; newer Node versions with built-in zstd support also work. Use `-- --limit 300000` for a quick sample. `better-sqlite3` is a native module: `npm ci` downloads a prebuilt binary, or compiles it with node-gyp if none matches (then a C++ toolchain and Python are needed). See [ADR 0004](docs/adr/0004-puzzle-source.md).
+5. Start the dev server:
 
 ```bash
 npm run dev
@@ -51,3 +52,5 @@ Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) and the [code
 ## License
 
 [Apache-2.0](LICENSE). Stockfish is a separate GPL project and is not part of this repository.
+
+Puzzles come from the [Lichess puzzle database](https://database.lichess.org/#puzzles), released under CC0. Attribution is not required; thank you, Lichess.

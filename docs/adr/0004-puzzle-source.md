@@ -16,6 +16,14 @@ Options checked on this machine (Node 20.19.0):
 
 Decision: spawn `zstd -dc` when available, else use `node:zlib` zstd if the runtime has it, else fail with an install hint (`brew install zstd`, `apt install zstd`). Contributors on Node 20 need the binary.
 
+## Hardening
+- Redirects are refused (`redirect: "error"`) and the final URL must be https on `database.lichess.org`.
+- A zstd child killed by a signal counts as success only if we killed it or `--limit` is set; otherwise the run fails and the temp DB is removed.
+- Decompressed output is capped (`--max-decompressed-mb`, default 4096) and lines are capped at 64 KiB, so a zstd bomb or newline-less stream cannot exhaust memory.
+
+## Contributor notes
+Node 20 needs the system `zstd` binary. better-sqlite3 downloads a prebuilt binary at `npm install`, or compiles with node-gyp (C++ toolchain and Python) when none matches. The puzzle data is CC0; we credit Lichess in the README.
+
 ## Tooling
 `scripts/setup-puzzles.mjs` imports the TypeScript core (parser, indexer, store) so the logic is unit tested and not duplicated. Node 20 cannot run TypeScript directly, so the script runs through `tsx` (dev dependency, `"setup:puzzles": "tsx scripts/setup-puzzles.mjs"`). This is a small stack addition recorded here.
 

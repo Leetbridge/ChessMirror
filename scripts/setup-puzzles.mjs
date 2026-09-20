@@ -7,11 +7,10 @@
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, renameSync, rmSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { createInterface } from "node:readline";
 import { Readable, Transform } from "node:stream";
 import { parseArgs } from "node:util";
 import zlib from "node:zlib";
-import { buildPuzzleIndex, DEFAULT_INGEST } from "../src/core/puzzles/index.ts";
+import { buildPuzzleIndex, DEFAULT_INGEST, guardedLines, isAllowedPuzzleUrl, zstdExitOk } from "../src/core/puzzles/index.ts";
 import { createSqlitePuzzleStore } from "../src/core/store/index.ts";
 
 const SOURCE_URL = "https://database.lichess.org/lichess_db_puzzle.csv.zst";
@@ -26,6 +25,7 @@ const { values } = parseArgs({
     "rating-max": { type: "string" },
     "timeout-min": { type: "string", default: "30" },
     "max-download-mb": { type: "string", default: "600" },
+    "max-decompressed-mb": { type: "string", default: "4096" },
     force: { type: "boolean", default: false },
     help: { type: "boolean", default: false },
   },
@@ -35,7 +35,7 @@ if (values.help) {
   console.log(
     "Options: --limit N (stop after N source rows; aborts the download early), --per-theme N (default " +
       `${DEFAULT_INGEST.perTheme}), --max-total N (default ${DEFAULT_INGEST.maxTotal}), --rating-min N (${DEFAULT_INGEST.ratingMin}), ` +
-      `--rating-max N (${DEFAULT_INGEST.ratingMax}), --timeout-min N (30), --max-download-mb N (600), --force`,
+      `--rating-max N (${DEFAULT_INGEST.ratingMax}), --timeout-min N (30), --max-download-mb N (600), --max-decompressed-mb N (4096), --force`,
   );
   process.exit(0);
 }
@@ -58,6 +58,7 @@ const options = {
 };
 const timeoutMs = intArg("timeout-min", 30) * 60_000;
 const maxBytes = intArg("max-download-mb", 600) * 1024 * 1024;
+const maxDecompressedBytes = intArg("max-decompressed-mb", 4096) * 1024 * 1024;
 
 const out = resolve(process.env.PUZZLES_DATABASE_PATH ?? "./data/puzzles.db");
 const tmp = `${out}.tmp`;
@@ -93,7 +94,9 @@ async function main() {
   }
 
   console.log(`Downloading ${SOURCE_URL}${limit ? ` (stopping after ${limit} rows)` : ""}`);
-  const res = await fetch(SOURCE_URL, { signal: abort.signal, headers: { "User-Agent": USER_AGENT } });
+  // redirect: "error" refuses any redirect; the URL check after fetch is defense in depth.
+  const res = await fetch(SOURCE_URL, { signal: abort.signal, redirect: "error", headers: { "User-Agent": USER_AGENT } });
+  if (!isAllowedPuzzleUrl(res.url || SOURCE_URL)) throw new Error(`Unexpected download host: ${res.url}`);
   if (!res.ok || !res.body) throw new Error(`Download failed: HTTP ${res.status}`);
   const declared = Number(res.headers.get("content-length") ?? 0);
   if (declared > maxBytes) {
@@ -112,23 +115,36 @@ async function main() {
   const body = Readable.fromWeb(res.body).on("error", (e) => counter.destroy(e)).pipe(counter);
   body.on("error", (e) => {
     streamError = e;
-    child?.kill("SIGKILL");
+    killChild();
   });
 
   let lineSource;
+  let killedByUs = false;
+  const killChild = () => {
+    killedByUs = true;
+    child?.kill("SIGKILL");
+  };
   let child;
   let childDone = Promise.resolve();
   if (systemZstd) {
-    child = spawn("zstd", ["-dc"], { stdio: ["pipe", "pipe", "inherit"] });
+    child = spawn("zstd", ["-dc"], { stdio: ["pipe", "pipe", limit ? "ignore" : "inherit"] });
     childDone = new Promise((resolveDone, rejectDone) => {
       child.on("error", rejectDone);
-      child.on("close", (code, signal) => (code === 0 || signal ? resolveDone() : rejectDone(new Error(`zstd exited with ${code}`))));
+      child.on("close", (code, signal) =>
+        zstdExitOk({ code, signal, killedByUs, limited: limit !== undefined })
+          ? resolveDone()
+          : rejectDone(new Error(`zstd exited abnormally (code ${code}, signal ${signal})`)),
+      );
     });
     child.stdin.on("error", () => {}); // EPIPE after early stop
     body.pipe(child.stdin);
     lineSource = child.stdout;
   } else {
     const dec = zlib.createZstdDecompress();
+    dec.on("error", (e) => {
+      streamError = e;
+      body.destroy();
+    });
     body.pipe(dec);
     lineSource = dec;
   }
@@ -139,9 +155,9 @@ async function main() {
   const started = Date.now();
   let stats;
   try {
-    const rl = createInterface({ input: lineSource, crlfDelay: Infinity });
-    stats = await buildPuzzleIndex(rl, store, options);
-    rl.close();
+    // Caps on decompressed size and line length protect against a zstd bomb or a newline-less stream.
+    const lines = guardedLines(lineSource, { maxBytes: maxDecompressedBytes, maxLineBytes: 64 * 1024 });
+    stats = await buildPuzzleIndex(lines, store, options);
     if (streamError) throw streamError;
     // Full run: a truncated or corrupt archive makes zstd exit non-zero. Limited run: we stop early on purpose.
     if (!limit) await childDone;
@@ -152,7 +168,7 @@ async function main() {
   } finally {
     clearTimeout(timer);
     body.destroy();
-    child?.kill("SIGKILL");
+    killChild();
   }
   store.close();
   renameSync(tmp, out);
